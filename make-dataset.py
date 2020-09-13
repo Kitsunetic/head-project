@@ -8,15 +8,19 @@ import pandas as pd
 
 from xqdm import xqdm
 
-USING_COLS = ['timestamp',
-              'acceleration_x', 'acceleration_y', 'acceleration_z',
-              'input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll',
-              'input_orientation_x', 'input_orientation_y', 'input_orientation_z', 'input_orientation_w']
-X_COLS = ['acceleration_x', 'acceleration_y', 'acceleration_z',
-          'input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll',
-          'input_orientation_x', 'input_orientation_y', 'input_orientation_z', 'input_orientation_w',
-          'input_orientation_xy', 'input_orientation_xz', 'input_orientation_xw',
-          'input_orientation_yz', 'input_orientation_yw', 'input_orientation_zw']
+USING_COLS = [
+    'timestamp',
+    # 'acceleration_x', 'acceleration_y', 'acceleration_z',
+    'input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll',
+    # 'input_orientation_x', 'input_orientation_y', 'input_orientation_z', 'input_orientation_w'
+]
+X_COLS = [
+    # 'acceleration_x', 'acceleration_y', 'acceleration_z',
+    'input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll',
+    # 'input_orientation_x', 'input_orientation_y', 'input_orientation_z', 'input_orientation_w',
+    # 'input_orientation_xy', 'input_orientation_xz', 'input_orientation_xw',
+    # 'input_orientation_yz', 'input_orientation_yw', 'input_orientation_zw'
+]
 Y_COLS = ['input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll']
 
 
@@ -70,12 +74,12 @@ def dataset_interpolation(data):
 def dataset_clean(csv_file: Path):
     csv = pd.read_csv(csv_file)
     csv = csv[USING_COLS]
-    csv['input_orientation_xy'] = csv['input_orientation_x'] * csv['input_orientation_y']
-    csv['input_orientation_xz'] = csv['input_orientation_x'] * csv['input_orientation_z']
-    csv['input_orientation_xw'] = csv['input_orientation_x'] * csv['input_orientation_w']
-    csv['input_orientation_yz'] = csv['input_orientation_y'] * csv['input_orientation_z']
-    csv['input_orientation_yw'] = csv['input_orientation_y'] * csv['input_orientation_w']
-    csv['input_orientation_zw'] = csv['input_orientation_z'] * csv['input_orientation_w']
+    # csv['input_orientation_xy'] = csv['input_orientation_x'] * csv['input_orientation_y']
+    # csv['input_orientation_xz'] = csv['input_orientation_x'] * csv['input_orientation_z']
+    # csv['input_orientation_xw'] = csv['input_orientation_x'] * csv['input_orientation_w']
+    # csv['input_orientation_yz'] = csv['input_orientation_y'] * csv['input_orientation_z']
+    # csv['input_orientation_yw'] = csv['input_orientation_y'] * csv['input_orientation_w']
+    # csv['input_orientation_zw'] = csv['input_orientation_z'] * csv['input_orientation_w']
 
     # cut timestamps on collapse points
     collapse_points = detect_collapse(csv)
@@ -99,7 +103,7 @@ def dataset_clean(csv_file: Path):
 
 
 def input_target_split(data, x_cols, y_cols, upset=6, offset=6, hop=6):
-    #print('len data', len(data))
+    # print('len data', len(data))
     X, Y = [], []
     for i in range(0, len(data) - upset - offset, hop):
         x = []
@@ -157,9 +161,29 @@ def make_dataset(csv_files, upset: int, offset: int, hop: int):
     return X_train, Y_train, X_valid, Y_valid
 
 
+def radian2degree(radian):
+    return radian * 180 / np.pi
+
+
+def simple_error(X_train, X_valid, Y_train, Y_valid):
+    diff1 = Y_train[:, :3] - X_train[:, :3]
+    diff2 = Y_valid[:, :3] - X_valid[:, :3]
+    mae1 = np.mean(np.abs(diff1), axis=0)
+    mae2 = np.mean(np.abs(diff2), axis=0)
+    mae = np.mean([mae1, mae2], axis=0)
+    mae = radian2degree(mae)
+    rms = np.sqrt(np.mean(np.square(mae)))
+    return mae, rms
+
+
 def main(args):
     data_dir = Path(args.data_dir)
-    csv_files = data_dir.glob('motion_data_*.csv')
+
+    if not args.fixed_filenames:
+        csv_files = data_dir.glob('motion_data_*.csv')
+    else:
+        csv_files = [data_dir / f for f in args.fixed_filenames]
+
     X_train, Y_train, X_valid, Y_valid = make_dataset(csv_files, args.upset, args.offset, args.hop)
     with h5py.File(data_dir / args.output_file_name, 'w') as f:
         f.create_dataset('X_train', data=X_train)
@@ -167,14 +191,20 @@ def main(args):
         f.create_dataset('X_valid', data=X_valid)
         f.create_dataset('Y_valid', data=Y_valid)
 
+    print('Calculate MAE, RMS')
+    mae, rms = simple_error(X_train, X_valid, Y_train, Y_valid)
+    print('MAE:', mae)
+    print('RMS:', rms)
+
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description='')
     p.add_argument('data_dir', type=str)
     p.add_argument('output_file_name', type=str)
-    p.add_argument('--upset', type=int, default=6)
-    p.add_argument('--offset', type=int, default=6)
-    p.add_argument('--hop', type=int, default=6)
+    p.add_argument('--upset', type=int, default=6, help='input의 길이')
+    p.add_argument('--offset', type=int, default=6, help='T')
+    p.add_argument('--hop', type=int, default=1)
+    p.add_argument('--fixed-filenames', type=str, nargs='*')
 
     args = p.parse_args(sys.argv[1:])
     main(args)
