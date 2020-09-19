@@ -103,6 +103,16 @@ def dataset_clean(csv_file: Path):
 
 
 def input_target_split(data, x_cols, y_cols, upset=6, offset=6, hop=6):
+    """
+    data의 순서대로 input/target을 만든다. data의 순서가 column 순서보다 앞에 온다.
+    :param data:
+    :param x_cols:
+    :param y_cols:
+    :param upset:
+    :param offset:
+    :param hop:
+    :return:
+    """
     # print('len data', len(data))
     X, Y = [], []
     for i in range(0, len(data) - upset - offset, hop):
