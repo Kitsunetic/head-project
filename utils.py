@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 @dataclass
 class History:
-    writer: SummaryWriter
+    epoch = 0
     loss = []
 
     yaw = []

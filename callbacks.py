@@ -1,66 +1,56 @@
 import math
+import uuid
 from pathlib import Path
 from typing import AnyStr
-from typing import Dict
 
 import imageio
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-from tqdm import tqdm
 
+import G
 import utils
+from metrics import BaseMetric
 
 
 class BaseCallback:
-    def on_epoch_begin(self, dl: DataLoader, epoch: int, metrics: Dict[torch.tensor]):
+    def __init__(self):
+        self._id = uuid.uuid4().hex
+        G._I_callback_ids[self._id] = self
+
+    def on_epoch_begin(self, is_train: bool, epoch: int, logs: dict):
         pass
 
-    def on_epoch_end(self, dl: DataLoader, epoch: int, metrics: Dict[torch.tensor]):
+    def on_epoch_end(self, is_train: bool, epoch: int, logs: dict):
         pass
 
-    def on_batch_begin(self, metrics: Dict[torch.tensor]):
+    def on_batch_begin(self, is_train: bool, epoch: int, logs: dict, inputs: torch.tensor):
         pass
 
-    def on_batch_end(self, metrics: Dict[torch.tensor]):
+    def on_batch_end(self, is_train: bool, epoch: int, logs: dict, inputs: torch.tensor, outputs: torch.tensor):
         pass
-
-
-class TQDMCallback(BaseCallback):
-    def __init__(self, num_epochs: int, desc='[{epoch:03d}/{num_epochs:03d}]', ncols=100):
-        super(TQDMCallback, self).__init__()
-
-        self.num_epochs = num_epochs
-        self.desc = desc
-        self.ncols = ncols
-
-        self.t: tqdm = None
-
-    def on_epoch_begin(self, dl: DataLoader, epoch: int, metrics: Dict[torch.tensor]):
-        desc = self.desc.format({'epoch': epoch, 'num_epochs': self.num_epochs})
-        self.t = tqdm(total=len(dl), ncols=self.ncols, desc=desc)
-
-    def on_epoch_end(self, dl: DataLoader, epoch: int, metrics: Dict[torch.tensor]):
-        if self.t is not None:
-            self.t.close()
-
-    def on_batch_end(self, metrics: Dict[torch.tensor]):
-        msg = ''
-        for k in metrics.keys():
-            msg += ' '.join(f'{k} {metrics[k].item()}')
-        self.t.set_postfix_str(msg, refresh=False)
-        self.t.update()
 
 
 class SaveCheckpoint(BaseCallback):
-    def __init__(self):
+    def __init__(self, filepath: AnyStr, monitor: BaseMetric, save_best_only=True, verbose=True):
+        """
+        Save checkpoint every epoch
+
+        :param checkpoint_spec: checkpoint specification
+            >>> {'model_state_dict': model, 'optim_state_dict': optim, 'epoch': epoch}
+        """
         super(SaveCheckpoint, self).__init__()
 
-    def on_epoch_end(self, dl: DataLoader, epoch: int, metrics: Dict[torch.tensor]):
-        pass
+        self.filepath = Path(filepath)
+        self.motitor = monitor
+        self.save_best_only = save_best_only
+        self.verbose = verbose
 
+    def on_epoch_end(self, is_train: bool, epoch: int, logs: dict):
+        if not is_train:
+            filepath = self.filepath.format(epoch=epoch, **logs)
+            ckpt_path = self.checkpoint_dir / ckpt_name
 
 
 class SaveCheckpoint:
