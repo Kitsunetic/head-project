@@ -1,15 +1,22 @@
 import math
 from dataclasses import dataclass
 
+import torch.nn as nn
+from torch.optim.optimizer import Optimizer
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
 
 @dataclass
 class History:
+    writer: SummaryWriter
     loss = []
+
     yaw = []
     pitch = []
     roll = []
     rms = []
-    diff = []
+
 
 
 def radian2degree(radian):
