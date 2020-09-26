@@ -8,6 +8,9 @@ import G
 
 class BaseMetric:
     def __init__(self, name: str, mode='min'):
+        mode = mode.lower()
+        assert mode in ['min', 'max']
+
         self.name = name
         self.mode = mode
 

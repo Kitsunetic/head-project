@@ -3,14 +3,11 @@ import uuid
 from pathlib import Path
 from typing import AnyStr
 
-import imageio
-import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset
+from torch.optim.optimizer import Optimizer
 
 import G
-import utils
 from metrics import BaseMetric
 
 
@@ -33,81 +30,87 @@ class BaseCallback:
 
 
 class SaveCheckpoint(BaseCallback):
-    def __init__(self, filepath: AnyStr, monitor: BaseMetric, save_best_only=True, verbose=True):
+    def __init__(self, checkpoint_spec: dict,
+                 filepath: AnyStr, monitor: BaseMetric,
+                 save_best_only=True, verbose=True):
         """
-        Save checkpoint every epoch
 
-        :param checkpoint_spec: checkpoint specification
-            >>> {'model_state_dict': model, 'optim_state_dict': optim, 'epoch': epoch}
+        :param checkpoint_spec:
+            >>> checkpoint_spec = {'model_name': model,
+                                   'optim_name': optim,
+                                   ...}
+        :param filepath:
+        :param monitor:
+        :param save_best_only:
+        :param save_model_only:
+        :param verbose:
         """
         super(SaveCheckpoint, self).__init__()
 
+        self.checkpoint_spec = checkpoint_spec
         self.filepath = Path(filepath)
-        self.motitor = monitor
+        self.monitor = monitor
         self.save_best_only = save_best_only
+        self.verbose = verbose
+
+        self.last_metric_value = math.inf
+        if self.monitor.mode == 'max':
+            self.last_metric_value *= -1
+
+    def on_epoch_end(self, is_train: bool, epoch: int, logs: dict):
+        if not is_train:
+            metric_name = 'val_' + self.monitor.name
+            assert metric_name in logs, f'There is no metric value in logs: {metric_name}'
+
+            metric_value = logs[metric_name]
+            condition1 = (self.monitor.mode == 'max' and self.last_metric_value < metric_value)
+            condition2 = (self.monitor.mode == 'min' and self.last_metric_value > metric_value)
+            if condition1 or condition2:
+                if self.verbose:
+                    text = 'Save checkpoint: '
+                    text += metric_name
+                    text += ' decreased ' if self.monitor.mode == 'min' else ' increased '
+                    text += f'from {self.last_metric_value} to {metric_value}'
+                    print(text)
+                self.last_metric_value = metric_value
+
+                filepath = str(self.filepath).format(epoch=epoch, **logs)
+                data = {}
+                for k, v in self.checkpoint_spec.items():
+                    vtype = type(self.checkpoint_spec[k])
+                    if issubclass(vtype, nn.DataParallel):
+                        data[k] = v.module.state_dict()
+                    elif issubclass(vtype, nn.Module) or issubclass(vtype, Optimizer):
+                        data[k] = v.state_dict()
+                    else:
+                        data[k] = v
+                torch.save(data, filepath)
+
+
+class SaveSampleBase(BaseCallback):
+    """
+    Save one sample per a epoch
+    Must be specified how to save sample data through `save_data` overriding function.
+    """
+
+    def __init__(self, model: nn.Module, sample_input: torch.Tensor, filepath: AnyStr, verbose=False):
+        super(SaveSampleBase, self).__init__()
+        self.model = model
+        self.sample_input = sample_input
+        self.filepath = Path(filepath)
         self.verbose = verbose
 
     def on_epoch_end(self, is_train: bool, epoch: int, logs: dict):
         if not is_train:
-            filepath = self.filepath.format(epoch=epoch, **logs)
-            ckpt_path = self.checkpoint_dir / ckpt_name
+            with torch.no_grad():
+                filepath = str(self.filepath).format(epoch=epoch, **logs)
+                device = next(self.model.parameters()).device
+                x = self.sample_input.to(device)
+                out = self.model(x)
+                self.save_data(out, filepath)
 
-
-class SaveCheckpoint:
-    def __init__(self, model, optim_encoder, optim_decoder, checkpoint_dir, verbose=False):
-        self.model = model.module if type(model) is nn.DataParallel else model
-        self.optim_encoder = optim_encoder
-        self.optim_decoder = optim_decoder
-        self.checkpoint_dir = checkpoint_dir
-        self.best_val_loss = math.inf
-        self.verbose = verbose
-
-    def __call__(self, epoch, history):
-        loss = history['valid']['loss'][-1]
-        acc = history['valid']['acc'][-1]
-        if loss < self.best_val_loss:
-            if self.verbose:
-                print('val_loss decreased from', self.best_val_loss, 'to', loss, ': save checkpoint.')
-            self.best_val_loss = loss
-            checkpoint_path = self.checkpoint_dir / f'ckpt-epoch{epoch:03d}-loss{loss:.4f}-acc{acc:.4f}.pth'
-            torch.save({
-                'model': self.model.state_dict(),
-                'optim_encoder': self.optim_encoder.state_dict(),
-                'optim_decoder': self.optim_decoder.state_dict()
-            }, checkpoint_path)
-
-
-class SaveSample:
-    def __init__(self, model: nn.Module, ds: Dataset, checkpoint_dir: AnyStr, verbose=False):
-        self.model = model
-        self.checkpoint_dir = Path(checkpoint_dir)
-        self.verbose = verbose
-
-        # get sample
-        x, y, _ = ds[0]
-        dx = (x.permute([1, 2, 0]).numpy() * 255.).astype(np.uint8)
-        dy = utils.color_label_map(y).numpy()
-        imageio.imwrite(self.checkpoint_dir / f'sample_x.png', dx)
-        imageio.imwrite(self.checkpoint_dir / f'sample_y.png', dy)
-
-        self.x = x.unsqueeze(0)
-
-    def __call__(self, epoch: int):
-        fname = self.checkpoint_dir / f'sample_out-epoch{epoch:03d}.png'
-        if self.verbose:
-            print('Write sample image to', fname)
-
-        with torch.no_grad():
-            self.model.eval()
-
-            x = self.x
-            if GPU:
-                x = x.cuda()
-
-            out = self.model(x)
-            _, out = torch.max(out, dim=1)
-            out = utils.color_label_map(out.squeeze()).numpy()
-            imageio.imwrite(fname, out)
+    def save_data(self, output: torch.tensor, filepath: str):
+        raise NotImplementedError
 
 
 class EarlyStopping:
