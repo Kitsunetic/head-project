@@ -9,24 +9,27 @@ import torch.nn as nn
 import datasets
 import models
 import torch_burn as tb
+from torch_burn.callbacks import EarlyStopping, SaveCheckpoint, LRDecaying, Tensorboard
+from torch_burn.metrics import Metric
+from torch_burn.traininer import Trainer
 
 
-class YawMetric(tb.metrics.Metric):
+class YawMetric(Metric):
     def __call__(self, outputs: torch.tensor, targets: torch.tensor):
         return torch.mean(torch.abs(outputs[:, 0] - targets[:, 0]))
 
 
-class RollMetric(tb.metrics.Metric):
+class RollMetric(Metric):
     def __call__(self, outputs: torch.tensor, targets: torch.tensor):
         return torch.mean(torch.abs(outputs[:, 1] - targets[:, 1]))
 
 
-class PitchMetric(tb.metrics.Metric):
+class PitchMetric(Metric):
     def __call__(self, outputs: torch.tensor, targets: torch.tensor):
         return torch.mean(torch.abs(outputs[:, 2] - targets[:, 2]))
 
 
-class RMSMetric(tb.metrics.Metric):
+class RMSMetric(Metric):
     def __call__(self, outputs: torch.tensor, targets: torch.tensor):
         return torch.mean(torch.abs(outputs - targets))
 
@@ -57,15 +60,17 @@ def main(args):
                PitchMetric('pitch'),
                RollMetric('roll'),
                RMSMetric('rms')]
+
     callbacks = [
-        tb.callbacks.EarlyStopping(metric),
-        tb.callbacks.SaveCheckpoint(checkpoint_spec={'model': model, 'optim': optimizer},
-                                    filepath=checkpoint_dir / 'ckpt-{val_loss:.4f}.pth',
-                                    monitor=metric),
-        tb.callbacks.LRDecaying(optimizer, metric),
-        tb.callbacks.Tensorboard(checkpoint_dir, model, train_ds[0][0].cuda(), args.dataset_path)
+        EarlyStopping(metric),
+        SaveCheckpoint(checkpoint_spec={'model': model, 'optim': optimizer},
+                       save_dir=checkpoint_dir,
+                       filepath='ckpt-{val_loss:.4f}.pth',
+                       monitor=metric),
+        LRDecaying(optimizer, metric),
+        Tensorboard(checkpoint_dir, model, train_ds[0][0].cuda(), args.dataset_path)
     ]
-    trainer = tb.traininer.Trainer(model, optimizer, metrics, callbacks)
+    trainer = Trainer(model, optimizer, metrics, callbacks)
     trainer.fit(train_ds, valid_ds,
                 start_epoch=args.start_epoch, num_epochs=args.num_epochs,
                 batch_size=args.batch_size, shuffle=False)
@@ -73,13 +78,19 @@ def main(args):
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser()
+
+    # model options
+    p.add_argument('--input-size', type=int, default=18)
+    p.add_argument('--output-size', type=int, default=3)
+
+    # train options
     p.add_argument('--checkpoint-dir', type=str, default='./checkpoint')
     p.add_argument('--num-epochs', type=int, default=20)
     p.add_argument('--start-epoch', type=int, default=1)
     p.add_argument('--batch-size', type=int, default=64)
     p.add_argument('--lr', type=float, default=1e-3)
-    p.add_argument('--input-size', type=int, default=18)
-    p.add_argument('--output-size', type=int, default=3)
+
+    # mandatory options
     p.add_argument('experiment_name', type=str)
     p.add_argument('dataset_path', type=str, help='example: data/head/head-dataset-3166.hdf5')
     args = p.parse_args(sys.argv[1:])
