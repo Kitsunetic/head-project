@@ -22,7 +22,6 @@ def process_file(file: Path, T: int, window_size: int, hop_length: int):
     global datainfo
 
     csv = pd.read_csv(file)
-    # csv = {col: csv[col].to_list() for col in csv.columns}
     w, h = window_size, hop_length
 
     xcols = ['acceleration_x', 'acceleration_y', 'acceleration_z',
@@ -38,11 +37,15 @@ def process_file(file: Path, T: int, window_size: int, hop_length: int):
 
     # csv standardization
     # 데이터에 outlier가 있어서 min/max값을 신뢰할 수 없다보니 normalize는 의미가 없다고 생각됨
-    for col in xcols:
-        csv[col] = (csv[col] - datainfo[col][2]) / datainfo[col][3]
+    #for col in xcols:
+    #    csv[col] = (csv[col] - datainfo[col][2]) / datainfo[col][3]
+
+    # csv의 index를 없애기 위해서 list로 변경
+    L = len(csv)
+    csv = {col: csv[col].to_list() for col in csv.columns}
 
     data = {'X_train': [], 'Y_train': [], 'X_test': [], 'Y_test': []}
-    for i in range(0, len(csv) - w - T, h):
+    for i in range(0, L - w - T, h):
         # train과 test의 중간지점은 무시: 데이터를 학습하는게 아니라 외울 수 있음.
         if len(csv) // 2 - w <= i <= len(csv) // 2 + w:
             continue
@@ -50,7 +53,7 @@ def process_file(file: Path, T: int, window_size: int, hop_length: int):
         # 데이터의 구조는
         # X: (column 수, window_size)
         # Y: (column 수, 1) --> 그냥 (columnt 수) 의 vector로 하자
-        x = [torch.tensor(csv[col][i:i + w].to_list(), dtype=torch.float32) for col in xcols]
+        x = [torch.tensor(csv[col][i:i + w], dtype=torch.float32) for col in xcols]
         y = [csv[col][i + w + T] for col in ycols]
         x = torch.stack(x)
         y = torch.tensor(y, dtype=torch.float32)
@@ -61,7 +64,19 @@ def process_file(file: Path, T: int, window_size: int, hop_length: int):
             data['Y_train'].append(y)
         else:
             data['X_test'].append(x)
-            data['Y_test'].append(x)
+            data['Y_test'].append(y)
+
+    """ 데이터 이상치 확인
+    X_train = torch.stack(data['X_train'])
+    dd = []
+    for j in range(X_train.shape[0]):
+        dd.append(X_train[j, :, 1:] - X_train[j, :, :-1])
+    dd = torch.stack(dd)
+    for i in range(12):
+        q = dd[:, i, :]
+        if q.max() > 0.5 or q.min() < -0.5:
+            print(i, q.max(), q.min(), q.mean(), q.std())
+    """
 
     return data
 
@@ -72,7 +87,7 @@ def _process_file(args):
 
 
 def main(args):
-    files = Path('data/interpolation').glob('interpolation_*.csv')
+    files = list(Path('data/interpolation').glob('interpolation_*.csv'))
     items = [(f, args.T, args.window_size, args.hop_length) for f in files]
     total_data = defaultdict(list)
     with Pool() as pool:
@@ -81,7 +96,11 @@ def main(args):
                 # 데이터를 하나로 합치기
                 for key in data.keys():
                     total_data[key].extend(data[key])
+                t.set_postfix_str(files[i].name, refresh=False)
                 t.update()
+
+    # datainfo도 추가
+    total_data['datainfo'] = datainfo
 
     # 전체 데이터를 pth파일로 저장
     torch.save(total_data, args.out_path)
