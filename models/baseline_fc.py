@@ -1,13 +1,35 @@
 import torch.nn as nn
 
 
-class FullyConnectedModel(nn.Module):
-    def __init__(self, input_size, output_size):
-        super(FullyConnectedModel, self).__init__()
+class FullyConnectedModel1(nn.Module):
+    def __init__(self, input_size=144, output_size=3):
+        super(FullyConnectedModel1, self).__init__()
         self.fc = nn.Linear(input_size, output_size)
 
     def forward(self, x):
-        x = x[:, :3, :].flatten(1)  # batch랑 yaw, pitch, roll만 남기고 flatten
+        x = x[:, 10:13, :].flatten(1)  # batch랑 yaw, pitch, roll만 남기고 flatten
+        x = self.fc(x)
+        return x
+
+
+class FullyConnectedModel2(nn.Module):
+    def __init__(self, input_size=288, output_size=3):
+        super(FullyConnectedModel2, self).__init__()
+        self.fc = nn.Linear(input_size, output_size)
+
+    def forward(self, x):
+        x = x[:, [0, 1, 2, 10, 11, 12], :].flatten(1)
+        x = self.fc(x)
+        return x
+
+
+class FullyConnectedModel3(nn.Module):
+    def __init__(self, input_size=480, output_size=3):
+        super(FullyConnectedModel3, self).__init__()
+        self.fc = nn.Linear(input_size, output_size)
+
+    def forward(self, x):
+        x = x[:, [0, 1, 2, 6, 7, 8, 9, 10, 11, 12], :].flatten(1)
         x = self.fc(x)
         return x
 

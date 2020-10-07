@@ -22,12 +22,9 @@ def get_metrics(criterion, datainfo):
     std_pitch = datainfo['input_orientation_pitch'][3]
     mean_roll = datainfo['input_orientation_roll'][2]
     std_roll = datainfo['input_orientation_roll'][3]
-    mean_rms = (mean_yaw + mean_pitch + mean_roll) / 3
-    std_rms = (std_yaw + std_pitch + std_roll) / 3
     metrics.append(utils.YawMetric('yaw', mean=mean_yaw, std=std_yaw))
     metrics.append(utils.PitchMetric('pitch', mean=mean_pitch, std=std_pitch))
     metrics.append(utils.RollMetric('roll', mean=mean_roll, std=std_roll))
-    metrics.append(utils.RMSMetric('rms', mean=mean_rms, std=std_rms))
     return metrics
 
 
@@ -37,7 +34,7 @@ def main(args):
 
     train_ds, valid_ds, datainfo = datasets.make_dataset(args.dataset_path)
 
-    model = models.FullyConnectedModel(144, 3)
+    model = models.FullyConnectedModel3()
     criterion = nn.MSELoss()
     if gpus > 0:
         model = model.cuda()
@@ -60,10 +57,6 @@ def main(args):
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser()
-
-    # model options
-    p.add_argument('--input-size', type=int, default=18)
-    p.add_argument('--output-size', type=int, default=3)
 
     # train options
     p.add_argument('--checkpoint-dir', type=str, default='./checkpoint')

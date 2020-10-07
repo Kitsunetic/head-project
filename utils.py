@@ -16,7 +16,7 @@ class YawMetric(Metric):
         self.std = std
 
     def get_value(self, outputs: torch.Tensor, targets: torch.Tensor):
-        return radian2degree(torch.mean(torch.abs((outputs[:, 0] - targets[:, 0]) * self.std - self.mean)))
+        return radian2degree(torch.mean(torch.abs((outputs[:, 0] - targets[:, 0]) * self.std)))
 
 
 class PitchMetric(Metric):
@@ -26,7 +26,7 @@ class PitchMetric(Metric):
         self.std = std
 
     def get_value(self, outputs: torch.Tensor, targets: torch.Tensor):
-        return radian2degree(torch.mean(torch.abs((outputs[:, 1] - targets[:, 1]) * self.std - self.mean)))
+        return radian2degree(torch.mean(torch.abs((outputs[:, 1] - targets[:, 1]) * self.std)))
 
 
 class RollMetric(Metric):
@@ -36,7 +36,7 @@ class RollMetric(Metric):
         self.std = std
 
     def get_value(self, outputs: torch.Tensor, targets: torch.Tensor):
-        return radian2degree(torch.mean(torch.abs((outputs[:, 2] - targets[:, 2]) * self.std - self.mean)))
+        return radian2degree(torch.mean(torch.abs((outputs[:, 2] - targets[:, 2]) * self.std)))
 
 
 class RMSMetric(Metric):
