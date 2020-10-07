@@ -26,7 +26,15 @@
 #python make-dataset2.py data/pth/T12-win24-hop12.pth --T 12 --window_size 24 --hop_length 12
 #python make-dataset2.py data/pth/T18-win24-hop12.pth --T 18 --window_size 24 --hop_length 12
 
-python make-dataset2.py data/pth/C1-T6-win48-hop24.pth --T 6 --window_size 48 --hop_length 24
-python make-dataset2.py data/pth/C1-T12-win48-hop24.pth --T 12 --window_size 48 --hop_length 24
-python make-dataset2.py data/pth/C1-T18-win48-hop24.pth --T 18 --window_size 48 --hop_length 24
+python make-dataset2.py data/pth/C1-T6-win128-hop24.pth --T 6 --window_size 128 --hop_length 24 --columns 1
+python make-dataset2.py data/pth/C1-T12-win128-hop24.pth --T 12 --window_size 128 --hop_length 24 --columns 1
+python make-dataset2.py data/pth/C1-T18-win128-hop24.pth --T 18 --window_size 128 --hop_length 24 --columns 1
+
+python make-dataset2.py data/pth/C2-T6-win128-hop24.pth --T 6 --window_size 128 --hop_length 24 --columns 2
+python make-dataset2.py data/pth/C2-T12-win128-hop24.pth --T 12 --window_size 128 --hop_length 24 --columns 2
+python make-dataset2.py data/pth/C2-T18-win128-hop24.pth --T 18 --window_size 128 --hop_length 24 --columns 2
+
+python make-dataset2.py data/pth/C3-T6-win128-hop24.pth --T 6 --window_size 128 --hop_length 24 --columns 3
+python make-dataset2.py data/pth/C3-T12-win128-hop24.pth --T 12 --window_size 128 --hop_length 24 --columns 3
+python make-dataset2.py data/pth/C3-T18-win128-hop24.pth --T 18 --window_size 128 --hop_length 24 --columns 3
 

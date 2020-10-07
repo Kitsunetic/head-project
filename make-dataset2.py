@@ -18,16 +18,29 @@ from tqdm import tqdm
 datainfo = None
 
 
-def process_file(file: Path, T: int, window_size: int, hop_length: int):
+def process_file(file: Path, T: int, window_size: int, hop_length: int, columns: int):
     global datainfo
 
     csv = pd.read_csv(file)
     w, h = window_size, hop_length
 
-    xcols = [#'acceleration_x', 'acceleration_y', 'acceleration_z',
-             #'angular_vec_x', 'angular_vec_y', 'angular_vec_z',
-             #'input_orientation_x', 'input_orientation_y', 'input_orientation_z', 'input_orientation_w',
+    """
+    xcols = ['acceleration_x', 'acceleration_y', 'acceleration_z',
+             'angular_vec_x', 'angular_vec_y', 'angular_vec_z',
+             'input_orientation_x', 'input_orientation_y', 'input_orientation_z', 'input_orientation_w',
              'input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll']
+     """
+    if columns == 1:
+        xcols = ['input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll']
+    elif columns == 2:
+        xcols = ['acceleration_x', 'acceleration_y', 'acceleration_z',
+                 'input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll']
+    elif columns == 3:
+        xcols = ['acceleration_x', 'acceleration_y', 'acceleration_z',
+                 'input_orientation_x', 'input_orientation_y', 'input_orientation_z', 'input_orientation_w',
+                 'input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll']
+    else:
+        raise NotImplementedError(f'Unknown columns: {columns}')
     ycols = ['input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll']
 
     # 각 컬럼별 max, min, mean, std 값들
@@ -88,7 +101,7 @@ def _process_file(args):
 
 def main(args):
     files = list(Path('data/interpolation').glob('interpolation_*.csv'))
-    items = [(f, args.T, args.window_size, args.hop_length) for f in files]
+    items = [(f, args.T, args.window_size, args.hop_length, args.columns) for f in files]
     total_data = defaultdict(list)  # X_train, X_test, Y_train, Y_test
     with Pool() as pool:
         with tqdm(total=len(items), ncols=100, desc='Making dataset') as t:
@@ -112,6 +125,7 @@ if __name__ == '__main__':
     p.add_argument('--T', type=int, default=6)
     p.add_argument('--window_size', type=int, default=6)
     p.add_argument('--hop_length', type=int, default=6)
+    p.add_argument('--columns', type=int, default=3)
     args = p.parse_args(sys.argv[1:])
 
     args.out_path = Path(args.out_path)
