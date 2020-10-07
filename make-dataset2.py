@@ -37,8 +37,8 @@ def process_file(file: Path, T: int, window_size: int, hop_length: int):
 
     # csv standardization
     # 데이터에 outlier가 있어서 min/max값을 신뢰할 수 없다보니 normalize는 의미가 없다고 생각됨
-    #for col in xcols:
-    #    csv[col] = (csv[col] - datainfo[col][2]) / datainfo[col][3]
+    for col in xcols:
+        csv[col] = (csv[col] - datainfo[col][2]) / datainfo[col][3]
 
     # csv의 index를 없애기 위해서 list로 변경
     L = len(csv)
@@ -47,7 +47,7 @@ def process_file(file: Path, T: int, window_size: int, hop_length: int):
     data = {'X_train': [], 'Y_train': [], 'X_test': [], 'Y_test': []}
     for i in range(0, L - w - T, h):
         # train과 test의 중간지점은 무시: 데이터를 학습하는게 아니라 외울 수 있음.
-        if len(csv) // 2 - w <= i <= len(csv) // 2 + w:
+        if L // 2 - w <= i <= L // 2 + w:
             continue
 
         # 데이터의 구조는
@@ -59,7 +59,7 @@ def process_file(file: Path, T: int, window_size: int, hop_length: int):
         y = torch.tensor(y, dtype=torch.float32)
 
         # csv의 중간 인덱스를 기준으로 dict에 X_train, X_test, Y_train, Y_test로 나눠서 저장
-        if i < len(csv) // 2:
+        if i < L // 2:
             data['X_train'].append(x)
             data['Y_train'].append(y)
         else:
@@ -89,7 +89,7 @@ def _process_file(args):
 def main(args):
     files = list(Path('data/interpolation').glob('interpolation_*.csv'))
     items = [(f, args.T, args.window_size, args.hop_length) for f in files]
-    total_data = defaultdict(list)
+    total_data = defaultdict(list)  # X_train, X_test, Y_train, Y_test
     with Pool() as pool:
         with tqdm(total=len(items), ncols=100, desc='Making dataset') as t:
             for i, data in enumerate(pool.imap_unordered(_process_file, items)):
