@@ -34,7 +34,17 @@ def main(args):
 
     train_ds, valid_ds, datainfo = datasets.make_dataset(args.dataset_path)
 
-    model = models.FullyConnectedModel3()
+    # 데이터셋 파일 이름에서 in_channels 를 구한다.
+    if args.dataset_path.name.startswith('C1'):
+        in_channels = 3
+    elif args.dataset_path.name.startswith('C2'):
+        in_channels = 6
+    elif args.dataset_path.name.startswith('C3'):
+        in_channels = 10
+    else:
+        raise NotImplementedError(f'Worng dataset name: {args.dataset_path}')
+
+    model = models.BaselineCNN1d(in_channels, 3)
     criterion = nn.MSELoss()
     if gpus > 0:
         model = model.cuda()
@@ -48,7 +58,7 @@ def main(args):
                                 filepath='ckpt-{val_loss:.4f}.pth',
                                 monitor=metrics[0]),
                  LRDecaying(optimizer, metrics[0]),
-                 Tensorboard(checkpoint_dir, model, train_ds[0][0], args.dataset_path, gpus=gpus)]
+                 Tensorboard(checkpoint_dir, comment=args.dataset_path, gpus=gpus)]
     trainer = Trainer(model, optimizer, metrics, callbacks, ncols=150)
     trainer.fit(train_ds, valid_ds,
                 start_epoch=args.start_epoch, num_epochs=args.num_epochs,
@@ -69,4 +79,5 @@ if __name__ == '__main__':
     p.add_argument('experiment_name', type=str)
     p.add_argument('dataset_path', type=str, help='example: data/head/head-dataset-3166.hdf5')
     args = p.parse_args(sys.argv[1:])
+    args.dataset_path = Path(args.dataset_path)
     main(args)
