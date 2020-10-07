@@ -25,6 +25,7 @@ def get_metrics(criterion, datainfo):
     metrics.append(utils.YawMetric('yaw', mean=mean_yaw, std=std_yaw))
     metrics.append(utils.PitchMetric('pitch', mean=mean_pitch, std=std_pitch))
     metrics.append(utils.RollMetric('roll', mean=mean_roll, std=std_roll))
+    metrics.append(utils.RMSMetric('rms', yaw_std=std_yaw, pitch_std=std_pitch, roll_std=std_roll))
     return metrics
 
 
