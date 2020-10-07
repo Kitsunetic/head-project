@@ -1,10 +1,15 @@
 import torch.nn as nn
 
 
-class FullyConnectedModel(nn.Sequential):
+class FullyConnectedModel(nn.Module):
     def __init__(self, input_size, output_size):
         super(FullyConnectedModel, self).__init__()
-        self.add_module('fc1', nn.Linear(input_size, output_size))
+        self.fc = nn.Linear(input_size, output_size)
+
+    def forward(self, x):
+        x = x[:, :3, :].flatten(1)  # batch랑 yaw, pitch, roll만 남기고 flatten
+        x = self.fc(x)
+        return x
 
 
 class BaselineFC2(nn.Module):

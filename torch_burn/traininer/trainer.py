@@ -9,9 +9,8 @@ from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader, Dataset, random_split
 from tqdm import tqdm
 
-from torch_burn.callbacks import Callback
+from torch_burn.callbacks import Callback, EarlyStopping
 from torch_burn.metrics import Metric
-
 
 class Trainer:
     def __init__(self,
@@ -116,7 +115,11 @@ class Trainer:
             logs.update(
                 {'val_' + metric.name: math.inf if metric.mode == 'min' else -math.inf for metric in self.metrics})
 
-        for epoch in range(start_epoch, num_epochs):
+        loop_stopper = False
+        for epoch in range(start_epoch, num_epochs+1):
+            if loop_stopper: # early stopping
+                break
+
             desc_base = self.desc.format(epoch=epoch, num_epochs=num_epochs)
             logs = self._init_logs()
 
@@ -137,6 +140,12 @@ class Trainer:
                     self.loop(False, epoch, valid_dl, logs, tqdm_desc=desc_base + ' Validation')
                 for callback in self.callbacks:
                     callback.on_epoch_end(False, epoch, logs)
+
+                    # early stopping
+                    if isinstance(callback, EarlyStopping):
+                        if callback.stopped:
+                            loop_stopper = True
+                            break
 
     def loop(self, is_train: bool, epoch: int, dl: DataLoader, logs, tqdm_desc: str = ''):
         """

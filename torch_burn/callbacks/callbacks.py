@@ -170,6 +170,8 @@ class SaveSampleBase(Callback):
 
 
 class EarlyStopping(MetricImprovingCallback):
+    stopped = False
+
     def __init__(self, monitor: Metric, patience=10, verbose=True):
         super(EarlyStopping, self).__init__(monitor)
 
@@ -186,6 +188,7 @@ class EarlyStopping(MetricImprovingCallback):
                 if self.verbose:
                     metric_name, metric_value = super().get_metric_info(logs)
                     print('Stop training because', metric_name, 'did not improved for', self.patience, 'epochs')
+                self.stopped = True
 
     def on_metric_improved(self, is_train: bool, epoch: int, logs: dict, metric_name: str, metric_value: float):
         if not is_train:
@@ -228,7 +231,8 @@ class LRDecaying(MetricImprovingCallback):
 
 class Tensorboard(Callback):
     def __init__(self, logdir: AnyStr, model: nn.Module = None,
-                 sample_input: torch.Tensor = None, comment: str = '', cuda=True):
+                 sample_input: torch.Tensor = None, comment: str = '',
+                 gpus=torch.cuda.device_count()):
         self.writer = SummaryWriter(logdir, comment=comment)
 
         if model is not None and sample_input is not None:
@@ -236,7 +240,7 @@ class Tensorboard(Callback):
                 model.eval()
 
                 sample_input = sample_input.unsqueeze(0)
-                if cuda:
+                if gpus > 0:
                     sample_input = sample_input.cuda()
                 self.writer.add_graph(model, sample_input)
 
