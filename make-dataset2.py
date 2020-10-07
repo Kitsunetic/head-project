@@ -24,9 +24,9 @@ def process_file(file: Path, T: int, window_size: int, hop_length: int):
     csv = pd.read_csv(file)
     w, h = window_size, hop_length
 
-    xcols = ['acceleration_x', 'acceleration_y', 'acceleration_z',
-             'angular_vec_x', 'angular_vec_y', 'angular_vec_z',
-             'input_orientation_x', 'input_orientation_y', 'input_orientation_z', 'input_orientation_w',
+    xcols = [#'acceleration_x', 'acceleration_y', 'acceleration_z',
+             #'angular_vec_x', 'angular_vec_y', 'angular_vec_z',
+             #'input_orientation_x', 'input_orientation_y', 'input_orientation_z', 'input_orientation_w',
              'input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll']
     ycols = ['input_orientation_yaw', 'input_orientation_pitch', 'input_orientation_roll']
 
