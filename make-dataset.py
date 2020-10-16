@@ -1,3 +1,7 @@
+"""
+원본 데이터셋 motion_data_*.csv 에서 crop, interpolation을 진행하고 hdf5 파일로 합친다.
+"""
+
 import argparse
 import sys
 from pathlib import Path
