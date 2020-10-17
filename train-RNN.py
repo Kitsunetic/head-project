@@ -92,4 +92,5 @@ def main(args):
 
 if __name__ == '__main__':
     args = getopt(sys.argv[1:])
+    tb.pprint_args(args)
     main(args)

@@ -69,10 +69,11 @@ class Trainer2:
             logs = self._init_logs()
 
             # train callbacks
-            for cb in self.callbacks:
-                cb.on_train_epoch_begin(epoch)
-            for m in self.metrics:
-                m.on_train_epoch_begin()
+            with torch.no_grad():
+                for cb in self.callbacks:
+                    cb.on_train_epoch_begin(epoch)
+                for m in self.metrics:
+                    m.on_train_epoch_begin()
 
             # train loop
             self.model.train()
@@ -80,8 +81,9 @@ class Trainer2:
                       desc=self.desc.format(epoch=epoch, num_epochs=num_epochs) + ' Train') as t:
                 for batch_idx, data in enumerate(train_dl):
                     # train batch callbacks
-                    for cb in self.callbacks:
-                        cb.on_train_batch_begin(epoch, batch_idx)
+                    with torch.no_grad():
+                        for cb in self.callbacks:
+                            cb.on_train_batch_begin(epoch, batch_idx)
 
                     # forward / backward
                     pred, y = self.forward(data)
@@ -117,27 +119,30 @@ class Trainer2:
                     t.update()
 
                     # train batch callbacks
-                    for cb in self.callbacks:
-                        cb.on_train_batch_end(epoch, batch_idx, losses)
+                    with torch.no_grad():
+                        for cb in self.callbacks:
+                            cb.on_train_batch_end(epoch, batch_idx, losses)
 
             # wait for tqdm closed
             time.sleep(0.01)
 
             # train epoch callbacks
-            for cb in self.callbacks:
-                cb.on_train_epoch_end(epoch, logs)
-            for m in self.metrics:
-                m.on_train_epoch_end()
-
-            # valid callbacks
-            for cb in self.callbacks:
-                cb.on_valid_epoch_begin(epoch)
-            for m in self.metrics:
-                m.on_valid_epoch_begin()
+            with torch.no_grad():
+                for cb in self.callbacks:
+                    cb.on_train_epoch_end(epoch, logs)
+                for m in self.metrics:
+                    m.on_train_epoch_end()
 
             # valid loop
             with torch.no_grad():
                 self.model.eval()
+
+                # valid callbacks
+                for cb in self.callbacks:
+                    cb.on_valid_epoch_begin(epoch)
+                for m in self.metrics:
+                    m.on_valid_epoch_begin()
+
                 with tqdm(total=len(valid_dl), ncols=self.ncols,
                           desc=self.desc.format(epoch=epoch, num_epochs=num_epochs) + ' Validation') as t:
                     for batch_idx, data in enumerate(valid_dl):

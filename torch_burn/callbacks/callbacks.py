@@ -49,6 +49,14 @@ class Callback:
         """Event when validation batch end"""
         pass
 
+    def on_fit_begin(self):
+        """Event when training started"""
+        pass
+
+    def on_fit_end(self, epoch: int):
+        """Event when training finished"""
+        pass
+
 
 class MetricImprovingCallback(Callback):
     def __init__(self, monitor: Metric, minimum_difference=0):

@@ -1,1 +1,2 @@
-from .callbacks import Callback, EarlyStopping, LRDecaying, SaveCheckpoint, SaveSampleBase, Tensorboard, SaveSampleBase2
+from .callbacks import Callback, EarlyStopping, LRDecaying, SaveCheckpoint, SaveSampleBase, Tensorboard, \
+    SaveSampleBase2
