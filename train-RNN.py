@@ -1,5 +1,6 @@
 import argparse
 import sys
+from multiprocessing import cpu_count
 from pathlib import Path
 
 import torch
@@ -24,15 +25,23 @@ def getopt(argv):
     p.add_argument('--batch-size', type=int, default=64)
     p.add_argument('--lr', type=float, default=1e-3)
     # experiment options
+    p.add_argument('--cpus', type=int, default=-1)
+    p.add_argument('--gpus', type=int, default=-1)
     p.add_argument('--seed', type=int, default=0)
     p.add_argument('experiment_name', type=str)
     p.add_argument('dataset_path', type=str, help='example: data/head/head-dataset-3166.hdf5')
 
     args = p.parse_args(argv)
+    tb.seed_everything(args.seed)
+
+    if args.cpus < 0:
+        args.cpus = cpu_count()
+    if args.gpus < 0:
+        args.gpus = torch.cuda.device_count()
+
     args.dataset_path = Path(args.dataset_path)
     args.checkpoint_dir = Path(args.checkpoint_dir) / args.experiment_name
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    tb.seed_everything(args.seed)
 
     return args
 
@@ -54,37 +63,19 @@ def get_metrics(criterion, datainfo):
 
 
 def main(args):
-    checkpoint_dir = Path(args.checkpoint_dir) / args.experiment_name
-    gpus = torch.cuda.device_count()
-
     train_ds, valid_ds, datainfo = datasets.make_dataset(args.dataset_path)
-
-    # 데이터셋 파일 이름에서 in_channels 를 구한다.
-    if args.dataset_path.name.startswith('C1'):
-        in_channels = 3
-    elif args.dataset_path.name.startswith('C2'):
-        in_channels = 6
-    elif args.dataset_path.name.startswith('C3'):
-        in_channels = 10
-    else:
-        raise NotImplementedError(f'Worng dataset name: {args.dataset_path}')
 
     model = models.BaselineCNN1d(in_channels, 3)
     criterion = nn.MSELoss()
-    if gpus > 0:
+    if args.gpus > 0:
         model = model.cuda()
         criterion = criterion.cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     metrics = get_metrics(criterion, datainfo)
 
-    callbacks = [EarlyStopping(metrics[0]),
-                 SaveCheckpoint(checkpoint_spec={'model': model, 'optim': optimizer},
-                                save_dir=checkpoint_dir,
-                                filepath='ckpt-{val_loss:.4f}.pth',
-                                monitor=metrics[0]),
-                 LRDecaying(optimizer, metrics[0]),
-                 Tensorboard(checkpoint_dir, comment=args.dataset_path, gpus=gpus)]
-    trainer = Trainer2(model, optimizer, metrics, callbacks, ncols=150)
+    callbacks = [EarlyStopping(metrics[0])]
+    trainer = Trainer2(model, optim=optimizer, metrics=metrics, callbacks=callbacks,
+                       data_parallel=False, ncols=100, cpus=args.cpus, gpus=args.gpus)
     trainer.fit(train_ds, valid_ds,
                 start_epoch=args.start_epoch, num_epochs=args.num_epochs,
                 batch_size=args.batch_size, shuffle=False)
