@@ -14,6 +14,8 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 
+import torch_burn as tb
+
 # 각 컬럼별 max, min, mean, std 값들 저장
 datainfo = None
 
@@ -50,8 +52,10 @@ def process_file(file: Path, T: int, window_size: int, hop_length: int, columns:
 
     # csv standardization
     # 데이터에 outlier가 있어서 min/max값을 신뢰할 수 없다보니 normalize는 의미가 없다고 생각됨
+    """
     for col in xcols:
         csv[col] = (csv[col] - datainfo[col][2]) / datainfo[col][3]
+    """
 
     # csv의 index를 없애기 위해서 list로 변경
     L = len(csv)
@@ -130,4 +134,5 @@ if __name__ == '__main__':
 
     args.out_path = Path(args.out_path)
     args.out_path.parent.mkdir(parents=True, exist_ok=True)
+    tb.pprint_args(args)
     main(args)
