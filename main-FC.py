@@ -33,7 +33,7 @@ def getopt(argv):
 
     args = p.parse_args(argv)
     # args.dataset_path = Path(args.dataset_path)
-    args.dataset_path = 'data/pth_nostd/C2-T18-win48-hop12.pth'
+    args.dataset_path = 'data/pth_nostd/C2-T18-win48-hop1.pth'
     args.checkpoint_dir = Path(args.checkpoint_dir) / args.experiment_name
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
     if args.cpus == -1: args.cpus = cpu_count()
