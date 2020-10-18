@@ -18,13 +18,28 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
+import torch_burn as tb
 
 # 각 컬럼별 max, min, mean, std 값들 저장
 datainfo = None
 
 
 def getopt(argv):
-    pass
+    p = argparse.ArgumentParser()
+    # IO options
+    p.add_argument('out_path', type=str)
+    # dataset options
+    p.add_argument('--T', type=int, default=6)
+    p.add_argument('--window_size', type=int, default=6)
+    p.add_argument('--hop_length', type=int, default=6)
+    p.add_argument('--columns', type=int, default=3)
+
+    args = p.parse_args(argv)
+
+    args.out_path = Path(args.out_path)
+    args.out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    return args
 
 
 class GaussianSmoothing(nn.Module):
@@ -196,14 +211,6 @@ def main(args):
 
 
 if __name__ == '__main__':
-    p = argparse.ArgumentParser()
-    p.add_argument('out_path', type=str)
-    p.add_argument('--T', type=int, default=6)
-    p.add_argument('--window_size', type=int, default=6)
-    p.add_argument('--hop_length', type=int, default=6)
-    p.add_argument('--columns', type=int, default=3)
-    args = p.parse_args(sys.argv[1:])
-
-    args.out_path = Path(args.out_path)
-    args.out_path.parent.mkdir(parents=True, exist_ok=True)
+    args = getopt(sys.argv[1:])
+    tb.pprint_args(args)
     main(args)

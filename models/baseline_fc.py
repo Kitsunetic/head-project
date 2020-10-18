@@ -58,18 +58,18 @@ class BaselineFC3(nn.Module):
 
         self.fc = nn.Sequential(
             nn.Linear(input_size, 2 * input_size),
+            nn.Dropout(0.2),
             nn.ReLU(inplace=True),
             nn.Linear(2 * input_size, 2 * input_size),
+            nn.Dropout(0.2),
             nn.ReLU(inplace=True),
             nn.Linear(2 * input_size, 4 * input_size),
+            nn.Dropout(0.2),
             nn.ReLU(inplace=True),
-            nn.Linear(4 * input_size, 4 * input_size),
-            nn.ReLU(inplace=True),
-            nn.Linear(4 * input_size, 8 * input_size),
-            nn.ReLU(inplace=True),
-            nn.Linear(8 * input_size, output_size)
+            nn.Linear(4 * input_size, output_size)
         )
 
     def forward(self, x):
+        x = x.flatten(1)
         x = self.fc(x)
         return x

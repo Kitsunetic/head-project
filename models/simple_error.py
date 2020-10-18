@@ -10,4 +10,4 @@ class SimpleError(nn.Module):
             p.requires_grad = False
 
     def forward(self, x):
-        return x[:, 10:13, -1]
+        return x[:, 3:6, -1]
