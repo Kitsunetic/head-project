@@ -3,6 +3,7 @@ import random
 from pathlib import Path
 from typing import AnyStr
 from typing import Tuple
+from typing import Union, List, Iterable
 
 import torch
 import torch.nn as nn
@@ -262,7 +263,10 @@ class EarlyStopping(MetricImprovingCallback):
     priority = 1
     stopped = False
 
-    def __init__(self, monitor: Metric, patience=10, verbose=True, minimum_difference=0):
+    def __init__(self, monitor: Union[Metric, List[Metric]], patience=10, verbose=True, minimum_difference=0):
+        if isinstance(monitor, Iterable):
+            monitor = tuple(monitor)[0]
+
         super(EarlyStopping, self).__init__(monitor, minimum_difference)
 
         self.patience = patience

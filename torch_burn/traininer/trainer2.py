@@ -150,7 +150,7 @@ class Trainer2:
                         for cb in self.callbacks:
                             cb.on_valid_batch_begin(epoch, batch_idx)
 
-                        # forward / backward
+                        # forward
                         pred, y = self.forward(data)
                         loss = self.metrics[0].get_value(pred, y)
 
