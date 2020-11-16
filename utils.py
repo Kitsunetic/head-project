@@ -1,8 +1,10 @@
+import random
 from math import pi
 from pathlib import Path
 from typing import AnyStr
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch_burn as tb
@@ -152,7 +154,7 @@ class HPMetric(tb.metrics.InvisibleMetric):
     @staticmethod
     def _calc_values(diff):
         diff = torch.cat(diff).abs_()  # (B, 3)
-        diff = radian2degree(diff)
+        #diff = radian2degree(diff)
         tile = diff.flatten().numpy()
         tile99 = np.percentile(tile, 99)
 
