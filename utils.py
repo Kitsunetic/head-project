@@ -1,10 +1,8 @@
-import random
 from math import pi
 from pathlib import Path
 from typing import AnyStr
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch_burn as tb
@@ -129,14 +127,15 @@ class HPSignalHistory(tb.metrics.InvisibleMetric):
 
 
 class HPMetric(tb.metrics.InvisibleMetric):
-    def __init__(self, name: str):
+    def __init__(self, name: str, scale=1.):
         super(HPMetric, self).__init__(name)
 
+        self.scale = scale
         self.diff = []
 
     def on_valid_epoch_end(self, epoch: int, logs: dict):
         # RMS, 99% tile 출력
-        yaw_v, pitch_v, roll_v, rms_v, tile99_v = self._calc_values(self.diff)
+        yaw_v, pitch_v, roll_v, rms_v, tile99_v = self._calc_values(self.diff, self.scale)
 
         print(f'                  validation')
         print(f' - Yaw          : {yaw_v:10f}')
@@ -152,9 +151,9 @@ class HPMetric(tb.metrics.InvisibleMetric):
             self.diff.append((outputs - targets).cpu())  # (B, 3)
 
     @staticmethod
-    def _calc_values(diff):
-        diff = torch.cat(diff).abs_()  # (B, 3)
-        #diff = radian2degree(diff)
+    def _calc_values(diff, scale):
+        diff = torch.cat(diff).abs_() * scale  # (B, 3)
+        # diff = radian2degree(diff)
         tile = diff.flatten().numpy()
         tile99 = np.percentile(tile, 99)
 
