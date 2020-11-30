@@ -233,3 +233,20 @@ class BaselineLSTM(nn.Module):
         x = self.fc(x)
 
         return x
+
+
+class AccuracyMetric(tb.metrics.Metric):
+    def on_valid_epoch_end(self, epoch: int, logs: dict):
+        self.u = 0
+        self.d = 0
+
+    def on_train_epoch_end(self, epoch: int, logs: dict):
+        self.u = 0
+        self.d = 0
+
+    def get_value(self, outputs: torch.Tensor, targets: torch.Tensor, is_train: bool):
+        outputs = outputs.detach().cpu().type(torch.int).flatten()
+        targets = targets.detach().cpu().type(torch.int).flatten()
+        self.u += (outputs - targets).sum()
+        self.d += outputs.numel()
+        return self.u / self.d
