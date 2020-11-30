@@ -136,3 +136,4 @@ dmypy.json
 *.hdf5
 *.zip
 /GAN-test/samples
+*.npy
