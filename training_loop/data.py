@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 
@@ -28,6 +29,26 @@ class CSVSequentialDataset(Dataset):
         ty = tx + 18
         x = self.csv.iloc[sx:tx][self.xcols].to_numpy()
         y = self.csv.iloc[ty][self.ycols]
+
+        x = torch.tensor(x, dtype=torch.float32)  # 300, 6
+        y = torch.tensor(y, dtype=torch.float32)  # 1, 3
+
+        return x, y
+
+
+class SingleFileDataset(Dataset):
+    def __init__(self, dataset_file):
+        super(SingleFileDataset, self).__init__()
+
+        data = np.load(dataset_file)
+        self.X = data['X']
+        self.Y = data['Y']
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, idx):
+        x, y = self.X[idx], self.Y[idx]
 
         x = torch.tensor(x, dtype=torch.float32)  # 300, 6
         y = torch.tensor(y, dtype=torch.float32)  # 1, 3

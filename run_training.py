@@ -1,5 +1,6 @@
 import argparse
 import sys
+from multiprocessing import cpu_count
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -11,7 +12,7 @@ import torch_optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from training_loop.data import CSVSequentialDataset
+from training_loop.data import SingleFileDataset
 from training_loop.metrics import HPMetric
 from training_loop.networks import get_model_by_name
 
@@ -20,12 +21,16 @@ def main(args):
     tb.seed_everything(args.seed)
 
     # Create dataset
+    """
     csv_files_train = sorted(list(Path(args.dataset).glob('*scene3_0.csv')))
     csv_files_test = sorted(list(Path(args.dataset).glob('*scene3_1.csv')))
     ds_train = [CSVSequentialDataset(f, args.window_size, args.stride) for f in csv_files_train]
     ds_train = tb.data.ChainDataset(*ds_train)
     ds_test = [CSVSequentialDataset(f, args.window_size, args.stride) for f in csv_files_test]
     ds_test = tb.data.ChainDataset(*ds_test)
+    """
+    ds_train = SingleFileDataset(Path(args.dataset) / f'train-win_{args.window_size}.npz')
+    ds_test = SingleFileDataset(Path(args.dataset) / f'test-win_{args.window_size}.npz')
 
     # Create model
     model = get_model_by_name(args.network)
@@ -47,7 +52,7 @@ def main(args):
     ]
 
     # Training
-    trainer = tb.Trainer(model, optimizer, metrics, callbacks, ncols=100)
+    trainer = tb.Trainer(model, optimizer, metrics, callbacks, ncols=100, cpus=args.cpus)
     trainer.fit(ds_train, ds_test, num_epochs=args.epochs, batch_size=args.batch_size, shuffle=True, pin_memory=True)
 
     # Test
@@ -215,9 +220,9 @@ def main(args):
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--window-size', type=int, default=60)
-    argparser.add_argument('--stride', type=int, default=1)
-    argparser.add_argument('--epochs', type=int, default=200)
+    argparser.add_argument('--epochs', type=int, default=100)
     argparser.add_argument('--batch-size', type=int, default=256)
+    argparser.add_argument('--cpus', type=int, default=cpu_count())
     argparser.add_argument('--network', type=str, required=True)
     argparser.add_argument('--dataset', type=str, required=True)
     argparser.add_argument('--result', type=str, default='results')
@@ -232,8 +237,7 @@ if __name__ == '__main__':
             dirs.append(f)
     dirs = sorted(dirs)
     experiment_number = int(dirs[-1].name[:4]) + 1 if dirs else 0
-    experiment_name = f'{experiment_number:04d}-{args.network}' \
-                      f'-win_{args.window_size}-stride_{args.stride}' \
+    experiment_name = f'{experiment_number:04d}-{args.network}-win_{args.window_size}' \
                       f'-epoch_{args.epochs:02d}-batch_size_{args.batch_size}'
     args.experiment_path = args.result / experiment_name
     print('Experiment Path:', args.experiment_path)

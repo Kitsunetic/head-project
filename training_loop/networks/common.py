@@ -1,7 +1,7 @@
 import torch.nn as nn
 
 from .conv import CNNBasedNet
-from .crnnc import CGRUC, CLSTM, CLSTMC, CRNNC
+from .crnnc import CGRUC, CLSTM, CLSTMC, CLSTMCFC, CRNNC
 from .mlp import MLPBasedNet, MultiLayerPerceptron, SecondLayerPerceptron, SingleLayerPerceptron
 from .resnet import ResNet1d
 from .rnn import BidirectionalStackedGRU, BidirectionalStackedLSTM, BidirectionalStackedRNN
@@ -21,7 +21,8 @@ _network_map = _make_map(SingleLayerPerceptron, SecondLayerPerceptron, MultiLaye
                          StackedRNN, StackedGRU, StackedLSTM,
                          BidirectionalStackedRNN, BidirectionalStackedGRU, BidirectionalStackedLSTM,
                          ResNet1d,
-                         CLSTM, CLSTMC, CRNNC, CGRUC)
+                         CLSTM, CLSTMC, CRNNC, CGRUC,
+                         CLSTMCFC)
 
 
 def get_model_by_name(name, *args, **kwargs) -> nn.Module:
