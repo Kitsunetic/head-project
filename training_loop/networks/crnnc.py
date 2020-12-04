@@ -78,13 +78,13 @@ class CLSTMC(nn.Module):
 
 
 class CRNNC(nn.Module):
-    def __init__(self):
+    def __init__(self, Activation=nn.LeakyReLU):
         super(CRNNC, self).__init__()
 
         self.conv_in = nn.Sequential(
             nn.Conv1d(6, 64, 7, padding=3, groups=2),
             nn.BatchNorm1d(64),
-            nn.LeakyReLU(),
+            Activation(),
             ResBlock1d(64, 64, 3)
         )
 
@@ -244,3 +244,23 @@ class CRNNCFCPReLU(nn.Module):
         x = self.fc(x)  # B, 3
 
         return x
+
+
+class CRNNC_PReLU(CRNNC):
+    def __init__(self):
+        super(CRNNC_PReLU, self).__init__(nn.PReLU)
+
+
+class CRNNC_ReLU(CRNNC):
+    def __init__(self):
+        super(CRNNC_ReLU, self).__init__(nn.ReLU)
+
+
+class CRNNC_Tanh(CRNNC):
+    def __init__(self):
+        super(CRNNC_Tanh, self).__init__(nn.Tanh)
+
+
+class CRNNC_Hardswish(CRNNC):
+    def __init__(self):
+        super(CRNNC_Hardswish, self).__init__(nn.Hardswish)
