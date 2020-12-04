@@ -139,3 +139,4 @@ dmypy.json
 *.npy
 ./results
 *.npz
+results

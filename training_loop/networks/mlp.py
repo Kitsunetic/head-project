@@ -5,10 +5,10 @@ import torch.nn as nn
 class SingleLayerPerceptron(nn.Module):
     def __init__(self):
         super(SingleLayerPerceptron, self).__init__()
-        self.layer = nn.Linear(360, 3)
+        self.layer = nn.Linear(180, 3)
 
     def forward(self, x):
-        x = torch.flatten(x, 1)  # B, 60, 6 --> B, 360
+        x = torch.flatten(x[:, :, :3], 1)  # B, 60, 3 --> B, 180
         x = self.layer(x)
         return x
 
@@ -16,12 +16,13 @@ class SingleLayerPerceptron(nn.Module):
 class SecondLayerPerceptron(nn.Module):
     def __init__(self):
         super(SecondLayerPerceptron, self).__init__()
-        self.layer1 = nn.Linear(360, 360)
+        self.layer1 = nn.Linear(180, 360)
         self.layer2 = nn.Linear(360, 3)
 
     def forward(self, x):
-        x = torch.flatten(x, 1)  # B, 60, 6 --> B, 360
+        x = torch.flatten(x[:, :, :3], 1)  # B, 60, 3 --> B, 180
         x = self.layer1(x)
+        x = torch.relu(x)
         x = self.layer2(x)
         return x
 
@@ -29,14 +30,16 @@ class SecondLayerPerceptron(nn.Module):
 class MultiLayerPerceptron(nn.Module):
     def __init__(self):
         super(MultiLayerPerceptron, self).__init__()
-        self.layer1 = nn.Linear(360, 360)
-        self.layer2 = nn.Linear(360, 360)
-        self.layer3 = nn.Linear(360, 3)
+        self.layer1 = nn.Linear(180, 360)
+        self.layer2 = nn.Linear(360, 720)
+        self.layer3 = nn.Linear(720, 3)
 
     def forward(self, x):
-        x = torch.flatten(x, 1)  # B, 60, 6 --> B, 360
+        x = torch.flatten(x[:, :, :3], 1)  # B, 60, 3 --> B, 180
         x = self.layer1(x)
+        x = torch.relu(x)
         x = self.layer2(x)
+        x = torch.relu(x)
         x = self.layer3(x)
         return x
 
@@ -46,19 +49,19 @@ class MLPBasedNet(nn.Module):
         super(MLPBasedNet, self).__init__()
 
         self.linear_block = nn.Sequential(
-            nn.Linear(360, 360),
-            nn.Dropout(0.2),
+            nn.Linear(180, 360),
             nn.ReLU(),
-            nn.Linear(360, 360),
             nn.Dropout(0.2),
+            nn.Linear(360, 720),
             nn.ReLU(),
-            nn.Linear(360, 360),
             nn.Dropout(0.2),
+            nn.Linear(720, 720),
             nn.ReLU(),
-            nn.Linear(360, 3)
+            nn.Dropout(0.2),
+            nn.Linear(720, 3)
         )
 
     def forward(self, x):
-        x = torch.flatten(x, 1)  # B, 60, 6 --> B, 360
+        x = torch.flatten(x[:, :, :3], 1)  # B, 60, 3 --> B, 180
         x = self.linear_block(x)
         return x
