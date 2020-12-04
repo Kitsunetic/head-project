@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from .resnet import ResBlock1d
+from .resnet import ResBlock1d, ResBlock1dPReLU
 
 
 class CLSTM(nn.Module):
@@ -183,6 +183,53 @@ class CLSTMCFC(nn.Module):
             nn.Dropout(0.2),
             nn.LeakyReLU(),
             nn.Linear(512, 3)
+        )
+
+    def forward(self, x):
+        x = x.transpose(1, 2)  # B, S, 6 --> B, 6, S
+        x = self.conv_in(x)  # B, 6, S
+        x = x.transpose(1, 2)  # B, S, 6
+
+        outs, _ = self.rnn(x)  # B, S, 128
+        x = outs.transpose(1, 2)  # B, C, S
+        x = self.conv_out(x)  # B, C, S
+        x = x[:, :, -1]  # B, C
+        x = self.fc(x)  # B, 3
+
+        return x
+
+
+class CRNNCFCPReLU(nn.Module):
+    def __init__(self):
+        super(CRNNCFCPReLU, self).__init__()
+
+        self.conv_in = nn.Sequential(
+            nn.Conv1d(6, 64, 7, padding=3, groups=2),
+            nn.BatchNorm1d(64),
+            nn.PReLU(),
+            ResBlock1dPReLU(64, 128, 3, stride=2),
+            ResBlock1dPReLU(128, 256, 3, stride=2)
+        )
+
+        self.rnn = nn.RNN(input_size=256,
+                          hidden_size=128,
+                          num_layers=6,
+                          batch_first=True,
+                          dropout=0.2,
+                          bidirectional=False)
+
+        self.conv_out = nn.Sequential(
+            ResBlock1dPReLU(128, 256, 3, stride=2),
+            ResBlock1dPReLU(256, 512, 3, stride=2)
+        )
+        self.fc = nn.Sequential(
+            nn.Linear(512, 1024),
+            nn.Dropout(0.2),
+            nn.PReLU(),
+            nn.Linear(1024, 1024),
+            nn.Dropout(0.2),
+            nn.PReLU(),
+            nn.Linear(1024, 3)
         )
 
     def forward(self, x):

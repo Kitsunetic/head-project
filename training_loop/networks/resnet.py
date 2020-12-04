@@ -36,6 +36,40 @@ class ResBlock1d(nn.Module):
         return x
 
 
+class ResBlock1dPReLU(nn.Module):
+    expansion = 1
+
+    def __init__(self, inchannels, channels, kernel_size, stride=1, groups=1):
+        super(ResBlock1dPReLU, self).__init__()
+
+        self.conv1 = nn.Sequential(
+            nn.Conv1d(inchannels, channels, kernel_size, padding=kernel_size // 2, stride=stride, groups=groups),
+            nn.BatchNorm1d(channels),
+            nn.PReLU(),
+            nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2, groups=groups),
+            nn.BatchNorm1d(channels)
+        )
+        self.act = nn.LeakyReLU()
+
+        self.conv2 = None
+        if inchannels != channels:
+            self.conv2 = nn.Sequential(
+                nn.Conv1d(inchannels, channels, 1, stride=stride, groups=groups),
+                nn.BatchNorm1d(channels)
+            )
+
+    def forward(self, x):
+        identity = x
+
+        x = self.conv1(x)
+        if self.conv2 is not None:
+            identity = self.conv2(identity)
+        x += identity
+        x = self.act(x)
+
+        return x
+
+
 class ResNet1d(nn.Module):
     def __init__(self, block, layers):
         super(ResNet1d, self).__init__()
