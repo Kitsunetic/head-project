@@ -48,7 +48,7 @@ def main(args):
 
     # Training
     trainer = tb.Trainer(model, optimizer, metrics, callbacks, ncols=100)
-    trainer.fit(ds_train, ds_test, num_epochs=200, batch_size=256, shuffle=True, pin_memory=True)
+    trainer.fit(ds_train, ds_test, num_epochs=args.epochs, batch_size=args.batch_size, shuffle=True, pin_memory=True)
 
     # Test
     model.eval()
@@ -59,7 +59,7 @@ def main(args):
     model.load_state_dict(ckpt['model'])
 
     # Prediction
-    dl = DataLoader(ds_test, batch_size=256, num_workers=16)
+    dl = DataLoader(ds_test, batch_size=args.batch_size, num_workers=16)
     inputs, targets, preds = [], [], []
     with tqdm(total=len(dl), position=0, ncols=100) as t:
         for x, y in dl:
@@ -98,8 +98,8 @@ def main(args):
     plt.savefig(args.experiment_path / 'TrainingResult_300-Yaw.png')
 
     plt.figure(figsize=(height, width))
-    plt.plot(T, Y[S:S + L, 0])
-    plt.plot(T, P[S:S + L, 0])
+    plt.plot(T, Y[S:S + L, 1])
+    plt.plot(T, P[S:S + L, 1])
     plt.legend(['Real', model.__class__.__name__])
     plt.xlabel('Time (s)')
     plt.ylabel('Degree')
@@ -108,8 +108,8 @@ def main(args):
     plt.savefig(args.experiment_path / 'TrainingResult_300-Pitch.png')
 
     plt.figure(figsize=(height, width))
-    plt.plot(T, Y[S:S + L, 0])
-    plt.plot(T, P[S:S + L, 0])
+    plt.plot(T, Y[S:S + L, 2])
+    plt.plot(T, P[S:S + L, 2])
     plt.legend(['Real', model.__class__.__name__])
     plt.xlabel('Time (s)')
     plt.ylabel('Degree')
@@ -117,14 +117,81 @@ def main(args):
     plt.tight_layout()
     plt.savefig(args.experiment_path / 'TrainingResult_300-Roll.png')
 
-    # Save loss history
+    S = 600
+    L = 600
+    T = np.linspace(0, L / 60, L)
     plt.figure(figsize=(height, width))
-    plt.plot(hp_metric.train_history['yaw'])
-    plt.plot(hp_metric.train_history['pitch'])
-    plt.plot(hp_metric.train_history['roll'])
-    plt.plot(hp_metric.train_history['rms'])
-    plt.plot(hp_metric.train_history['tile99'])
-    plt.legend(['Yaw, Pitch, Roll, RMS, 99Percentile'])
+    plt.plot(T, Y[S:S + L, 0])
+    plt.plot(T, P[S:S + L, 0])
+    plt.legend(['Real', model.__class__.__name__])
+    plt.xlabel('Time (s)')
+    plt.ylabel('Degree')
+    plt.title('Yaw')
+    plt.tight_layout()
+    plt.savefig(args.experiment_path / 'TrainingResult_600-Yaw.png')
+
+    plt.figure(figsize=(height, width))
+    plt.plot(T, Y[S:S + L, 1])
+    plt.plot(T, P[S:S + L, 1])
+    plt.legend(['Real', model.__class__.__name__])
+    plt.xlabel('Time (s)')
+    plt.ylabel('Degree')
+    plt.title('Pitch')
+    plt.tight_layout()
+    plt.savefig(args.experiment_path / 'TrainingResult_600-Pitch.png')
+
+    plt.figure(figsize=(height, width))
+    plt.plot(T, Y[S:S + L, 2])
+    plt.plot(T, P[S:S + L, 2])
+    plt.legend(['Real', model.__class__.__name__])
+    plt.xlabel('Time (s)')
+    plt.ylabel('Degree')
+    plt.title('Roll')
+    plt.tight_layout()
+    plt.savefig(args.experiment_path / 'TrainingResult_600-Roll.png')
+
+    S = 600
+    L = 3000
+    T = np.linspace(0, L / 60, L)
+    plt.figure(figsize=(height, width))
+    plt.plot(T, Y[S:S + L, 0])
+    plt.plot(T, P[S:S + L, 0])
+    plt.legend(['Real', model.__class__.__name__])
+    plt.xlabel('Time (s)')
+    plt.ylabel('Degree')
+    plt.title('Yaw')
+    plt.tight_layout()
+    plt.savefig(args.experiment_path / f'TrainingResult_{L}-Yaw.png')
+
+    plt.figure(figsize=(height, width))
+    plt.plot(T, Y[S:S + L, 1])
+    plt.plot(T, P[S:S + L, 1])
+    plt.legend(['Real', model.__class__.__name__])
+    plt.xlabel('Time (s)')
+    plt.ylabel('Degree')
+    plt.title('Pitch')
+    plt.tight_layout()
+    plt.savefig(args.experiment_path / f'TrainingResult_{L}-Pitch.png')
+
+    plt.figure(figsize=(height, width))
+    plt.plot(T, Y[S:S + L, 2])
+    plt.plot(T, P[S:S + L, 2])
+    plt.legend(['Real', model.__class__.__name__])
+    plt.xlabel('Time (s)')
+    plt.ylabel('Degree')
+    plt.title('Roll')
+    plt.tight_layout()
+    plt.savefig(args.experiment_path / f'TrainingResult_{L}-Roll.png')
+
+    # Save loss history
+    epochs_x = list(range(1, args.epochs + 1))
+    plt.figure(figsize=(height, width))
+    plt.plot(epochs_x, hp_metric.train_history['yaw'])
+    plt.plot(epochs_x, hp_metric.train_history['pitch'])
+    plt.plot(epochs_x, hp_metric.train_history['roll'])
+    plt.plot(epochs_x, hp_metric.train_history['rms'])
+    plt.plot(epochs_x, hp_metric.train_history['tile99'])
+    plt.legend(['Yaw', 'Pitch', 'Roll', 'RMS', '99Percentile'])
     plt.xlabel('Epoch')
     plt.ylabel('Mean Error')
     plt.title('Training Error')
@@ -132,12 +199,12 @@ def main(args):
     plt.savefig(args.experiment_path / 'ErrorPlot-Training.png')
 
     plt.figure(figsize=(height, width))
-    plt.plot(hp_metric.valid_history['yaw'])
-    plt.plot(hp_metric.valid_history['pitch'])
-    plt.plot(hp_metric.valid_history['roll'])
-    plt.plot(hp_metric.valid_history['rms'])
-    plt.plot(hp_metric.valid_history['tile99'])
-    plt.legend(['Yaw, Pitch, Roll, RMS, 99Percentile'])
+    plt.plot(epochs_x, hp_metric.valid_history['yaw'])
+    plt.plot(epochs_x, hp_metric.valid_history['pitch'])
+    plt.plot(epochs_x, hp_metric.valid_history['roll'])
+    plt.plot(epochs_x, hp_metric.valid_history['rms'])
+    plt.plot(epochs_x, hp_metric.valid_history['tile99'])
+    plt.legend(['Yaw', 'Pitch', 'Roll', 'RMS', '99Percentile'])
     plt.xlabel('Epoch')
     plt.ylabel('Mean Error')
     plt.title('Validation Error')
@@ -149,6 +216,8 @@ if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--window-size', type=int, default=60)
     argparser.add_argument('--stride', type=int, default=1)
+    argparser.add_argument('--epochs', type=int, default=200)
+    argparser.add_argument('--batch-size', type=int, default=256)
     argparser.add_argument('--network', type=str, required=True)
     argparser.add_argument('--dataset', type=str, required=True)
     argparser.add_argument('--result', type=str, default='results')
@@ -162,9 +231,12 @@ if __name__ == '__main__':
                 continue
             dirs.append(f)
     dirs = sorted(dirs)
-    experiment_number = int(dirs[-1][:4]) + 1 if dirs else 0
-    experiment_name = f'{experiment_number:04d}-{args.network}-win_{args.window_size}-stride_{args.stride}'
+    experiment_number = int(dirs[-1].name[:4]) + 1 if dirs else 0
+    experiment_name = f'{experiment_number:04d}-{args.network}' \
+                      f'-win_{args.window_size}-stride_{args.stride}' \
+                      f'-epoch_{args.epochs:02d}-batch_size_{args.batch_size}'
     args.experiment_path = args.result / experiment_name
+    print('Experiment Path:', args.experiment_path)
 
     args.seed = 0
     main(args)
