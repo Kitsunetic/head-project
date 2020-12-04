@@ -73,9 +73,14 @@ class ResNet1d(nn.Module):
 
     def _make_layer(self, block, channels, blocks, stride=1):
         layers = []
-        layers.append(block(self.inchannels, channels, stride=stride))
+        layers.append(block(self.inchannels, channels, 3, stride=stride))
         self.inchannels = channels * block.expansion
         for _ in range(1, blocks):
-            layers.append(block(self.inchannels, channels))
+            layers.append(block(self.inchannels, channels, 3))
 
         return nn.Sequential(*layers)
+
+
+class ResNet15(ResNet1d):
+    def __init__(self):
+        super(ResNet15, self).__init__(ResBlock1d, [2, 2, 2, 2])
