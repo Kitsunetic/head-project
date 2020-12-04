@@ -199,7 +199,7 @@ def main(args):
     plt.legend(['Yaw', 'Pitch', 'Roll', 'RMS', '99Percentile'])
     plt.xlabel('Epoch')
     plt.ylabel('Mean Error')
-    plt.title('Training Error')
+    plt.title(f'Training Error ({model.__class__.__name__})')
     plt.tight_layout()
     plt.savefig(args.experiment_path / 'ErrorPlot-Training.png')
 
@@ -212,7 +212,7 @@ def main(args):
     plt.legend(['Yaw', 'Pitch', 'Roll', 'RMS', '99Percentile'])
     plt.xlabel('Epoch')
     plt.ylabel('Mean Error')
-    plt.title('Validation Error')
+    plt.title(f'Validation Error ({model.__class__.__name__})')
     plt.tight_layout()
     plt.savefig(args.experiment_path / 'ErrorPlot-Validation.png')
 
