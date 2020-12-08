@@ -22,6 +22,7 @@ def main(args):
 
     # Create dataset
     """
+    # Load csv files directly --> requires a little more CPUs
     csv_files_train = sorted(list(Path(args.dataset).glob('*scene3_0.csv')))
     csv_files_test = sorted(list(Path(args.dataset).glob('*scene3_1.csv')))
     ds_train = [CSVSequentialDataset(f, args.window_size, args.stride) for f in csv_files_train]
@@ -30,7 +31,8 @@ def main(args):
     ds_test = tb.data.ChainDataset(*ds_test)
     """
     ds_train = SingleFileDataset(Path(args.dataset) / f'train-win_{args.window_size}.npz')
-    ds_test = SingleFileDataset(Path(args.dataset) / f'test-win_{args.window_size}.npz')
+    ds_test = SingleFileDataset(Path(args.dataset) / f'test-win_{args.window_size}.npz',
+                                means=ds_train.means, stds=ds_train.stds)
 
     # Create model
     model = get_model_by_name(args.network)
@@ -40,7 +42,7 @@ def main(args):
     criterion = nn.MSELoss().cuda()
     optimizer = torch_optimizer.RAdam(model.parameters())
 
-    hp_metric = HPMetric('hp_metric', args.experiment_path)
+    hp_metric = HPMetric('hp_metric', args.experiment_path, ds_train.means[:3], ds_train.stds[:3])
     metrics = [
         tb.metrics.ModuleMetric(criterion, 'loss'),
         hp_metric
@@ -93,8 +95,8 @@ def main(args):
     L = 300
     T = np.linspace(0, L / 60, L)
     plt.figure(figsize=(height, width))
-    plt.plot(T, Y[S:S + L, 0])
-    plt.plot(T, P[S:S + L, 0])
+    plt.plot(T, Y[S:S + L, 0] * ds_train.stds[0] + ds_train.means[0])
+    plt.plot(T, P[S:S + L, 0] * ds_train.stds[0] + ds_train.means[0])
     plt.legend(['Real', model.__class__.__name__])
     plt.xlabel('Time (s)')
     plt.ylabel('Degree')
@@ -103,8 +105,8 @@ def main(args):
     plt.savefig(args.experiment_path / 'TrainingResult_300-Yaw.png')
 
     plt.figure(figsize=(height, width))
-    plt.plot(T, Y[S:S + L, 1])
-    plt.plot(T, P[S:S + L, 1])
+    plt.plot(T, Y[S:S + L, 1] * ds_train.stds[1] + ds_train.means[1])
+    plt.plot(T, P[S:S + L, 1] * ds_train.stds[1] + ds_train.means[1])
     plt.legend(['Real', model.__class__.__name__])
     plt.xlabel('Time (s)')
     plt.ylabel('Degree')
@@ -113,8 +115,8 @@ def main(args):
     plt.savefig(args.experiment_path / 'TrainingResult_300-Pitch.png')
 
     plt.figure(figsize=(height, width))
-    plt.plot(T, Y[S:S + L, 2])
-    plt.plot(T, P[S:S + L, 2])
+    plt.plot(T, Y[S:S + L, 2] * ds_train.stds[2] + ds_train.means[2])
+    plt.plot(T, P[S:S + L, 2] * ds_train.stds[2] + ds_train.means[2])
     plt.legend(['Real', model.__class__.__name__])
     plt.xlabel('Time (s)')
     plt.ylabel('Degree')
@@ -126,8 +128,8 @@ def main(args):
     L = 600
     T = np.linspace(0, L / 60, L)
     plt.figure(figsize=(height, width))
-    plt.plot(T, Y[S:S + L, 0])
-    plt.plot(T, P[S:S + L, 0])
+    plt.plot(T, Y[S:S + L, 0] * ds_train.stds[1] + ds_train.means[1])
+    plt.plot(T, P[S:S + L, 0] * ds_train.stds[1] + ds_train.means[1])
     plt.legend(['Real', model.__class__.__name__])
     plt.xlabel('Time (s)')
     plt.ylabel('Degree')
@@ -136,8 +138,8 @@ def main(args):
     plt.savefig(args.experiment_path / 'TrainingResult_600-Yaw.png')
 
     plt.figure(figsize=(height, width))
-    plt.plot(T, Y[S:S + L, 1])
-    plt.plot(T, P[S:S + L, 1])
+    plt.plot(T, Y[S:S + L, 1] * ds_train.stds[1] + ds_train.means[1])
+    plt.plot(T, P[S:S + L, 1] * ds_train.stds[1] + ds_train.means[1])
     plt.legend(['Real', model.__class__.__name__])
     plt.xlabel('Time (s)')
     plt.ylabel('Degree')
@@ -146,8 +148,8 @@ def main(args):
     plt.savefig(args.experiment_path / 'TrainingResult_600-Pitch.png')
 
     plt.figure(figsize=(height, width))
-    plt.plot(T, Y[S:S + L, 2])
-    plt.plot(T, P[S:S + L, 2])
+    plt.plot(T, Y[S:S + L, 2] * ds_train.stds[2] + ds_train.means[2])
+    plt.plot(T, P[S:S + L, 2] * ds_train.stds[2] + ds_train.means[2])
     plt.legend(['Real', model.__class__.__name__])
     plt.xlabel('Time (s)')
     plt.ylabel('Degree')
@@ -159,8 +161,8 @@ def main(args):
     L = 3000
     T = np.linspace(0, L / 60, L)
     plt.figure(figsize=(height, width))
-    plt.plot(T, Y[S:S + L, 0])
-    plt.plot(T, P[S:S + L, 0])
+    plt.plot(T, Y[S:S + L, 0] * ds_train.stds[1] + ds_train.means[1])
+    plt.plot(T, P[S:S + L, 0] * ds_train.stds[1] + ds_train.means[1])
     plt.legend(['Real', model.__class__.__name__])
     plt.xlabel('Time (s)')
     plt.ylabel('Degree')
@@ -169,8 +171,8 @@ def main(args):
     plt.savefig(args.experiment_path / f'TrainingResult_{L}-Yaw.png')
 
     plt.figure(figsize=(height, width))
-    plt.plot(T, Y[S:S + L, 1])
-    plt.plot(T, P[S:S + L, 1])
+    plt.plot(T, Y[S:S + L, 1] * ds_train.stds[1] + ds_train.means[1])
+    plt.plot(T, P[S:S + L, 1] * ds_train.stds[1] + ds_train.means[1])
     plt.legend(['Real', model.__class__.__name__])
     plt.xlabel('Time (s)')
     plt.ylabel('Degree')
@@ -179,8 +181,8 @@ def main(args):
     plt.savefig(args.experiment_path / f'TrainingResult_{L}-Pitch.png')
 
     plt.figure(figsize=(height, width))
-    plt.plot(T, Y[S:S + L, 2])
-    plt.plot(T, P[S:S + L, 2])
+    plt.plot(T, Y[S:S + L, 2] * ds_train.stds[2] + ds_train.means[2])
+    plt.plot(T, P[S:S + L, 2] * ds_train.stds[2] + ds_train.means[2])
     plt.legend(['Real', model.__class__.__name__])
     plt.xlabel('Time (s)')
     plt.ylabel('Degree')
