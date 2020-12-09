@@ -61,9 +61,9 @@ class SingleFileDataset(Dataset):
         means = self.means.reshape(1, 1, 6)
         stds = self.stds.reshape(1, 1, 6)
         self.X = (self.X - means) / stds
-        if self.Y.shape[0] == 1:
+        if len(self.Y.shape) == 2:
             # M_to_1 dataset
-            self.Y = (self.Y - means[0, 0, :3]) / stds[0, 0, :3]
+            self.Y = (self.Y - means[:, 0, :3]) / stds[:, 0, :3]
         else:
             # M_to_M dataset
             self.Y = (self.Y - means[..., :3]) / stds[..., :3]

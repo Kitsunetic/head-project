@@ -186,6 +186,56 @@ class CGRUC(nn.Module):
         return x
 
 
+class CRNNC5(nn.Module):
+    def __init__(self):
+        super(CRNNC5, self).__init__()
+
+        self.conv_in = nn.Sequential(
+            nn.Conv1d(6, 64, 5, padding=2, groups=2, padding_mode='replicate'),
+            nn.BatchNorm1d(64),
+            nn.Hardswish(),
+            ResBlock1d(64, 64, 3, Activation=nn.Hardswish),
+            ResBlock1d(64, 128, 3, Activation=nn.Hardswish),
+            ResBlock1d(128, 128, 3, Activation=nn.Hardswish),
+            ResBlock1d(128, 256, 3, Activation=nn.Hardswish),
+            ResBlock1d(256, 256, 3, Activation=nn.Hardswish)
+        )
+
+        self.rnn = nn.RNN(input_size=256,
+                          hidden_size=256,
+                          num_layers=8,
+                          batch_first=True,
+                          dropout=0,
+                          bidirectional=False)
+
+        self.conv_out = nn.Sequential(
+            ResBlock1d(256, 512, 3, stride=2, Activation=nn.Hardswish),
+            ResBlock1d(512, 512, 3, stride=2, Activation=nn.Hardswish)
+        )
+        self.fc = nn.Sequential(
+            nn.Linear(512, 1024),
+            nn.Dropout(0.2),
+            nn.Hardswish(),
+            nn.Linear(1024, 512),
+            nn.Dropout(0.2),
+            nn.Hardswish(),
+            nn.Linear(512, 3)
+        )
+
+    def forward(self, x):
+        x = x.transpose(1, 2)  # B, S, 6 --> B, 6, S
+        x = self.conv_in(x)  # B, 6, S
+        x = x.transpose(1, 2)  # B, S, 6
+
+        outs, _ = self.rnn(x)  # B, S, 128
+        x = outs.transpose(1, 2)  # B, C, S
+        x = self.conv_out(x)  # B, C, S
+        x = x[:, :, -1]  # B, C
+        x = self.fc(x)  # B, 3
+
+        return x
+
+
 class CRNNC_PReLU(CRNNC):
     def __init__(self):
         super(CRNNC_PReLU, self).__init__(nn.PReLU)

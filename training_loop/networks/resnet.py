@@ -9,7 +9,8 @@ class ResBlock1d(nn.Module):
         super(ResBlock1d, self).__init__()
 
         self.conv1 = nn.Sequential(
-            nn.Conv1d(inchannels, channels, kernel_size, padding=kernel_size // 2, stride=stride, groups=groups, padding_mode='replicate'),
+            nn.Conv1d(inchannels, channels, kernel_size, padding=kernel_size // 2,
+                      stride=stride, groups=groups, padding_mode='replicate'),
             nn.BatchNorm1d(channels),
             Activation(),
             nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2, groups=groups, padding_mode='replicate'),
@@ -18,7 +19,7 @@ class ResBlock1d(nn.Module):
         self.act = Activation()
 
         self.conv2 = None
-        if inchannels != channels:
+        if inchannels != channels or stride != 1:
             self.conv2 = nn.Sequential(
                 nn.Conv1d(inchannels, channels, 1, stride=stride, groups=groups),
                 nn.BatchNorm1d(channels)
