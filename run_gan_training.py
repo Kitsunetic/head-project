@@ -149,7 +149,7 @@ def plot_results(epoch: int, result_dir: Path, x_input: Tensor, x_real: Tensor, 
     plot_idx = random.randint(0, x_input.shape[0])
 
     X = np.linspace(0, x_input.shape[1] / 60, x_input.shape[1])
-    titles = [f'Yaw - {epoch:03d}', f'Pitch - {epoch:03d}', f'Roll - {epoch:03d}']
+    titles = [f'Yaw - {epoch:03d}', f'Pitch - {epoch:03d}', f'Roll - Epoch{epoch:03d}']
 
     plt.figure(figsize=(16, 4))
     for i in range(3):
