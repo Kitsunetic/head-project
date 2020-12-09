@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from .resnet import ResBlock1d, ResBlock1dPReLU
+from .resnet import ResBlock1d
 
 
 class CLSTM(nn.Module):
@@ -40,14 +40,14 @@ class CLSTM(nn.Module):
 
 
 class CLSTMC(nn.Module):
-    def __init__(self):
+    def __init__(self, Activation=nn.LeakyReLU, big_fc=False):
         super(CLSTMC, self).__init__()
 
         self.conv_in = nn.Sequential(
-            nn.Conv1d(6, 64, 7, padding=3, groups=2),
+            nn.Conv1d(6, 64, 7, padding=3, groups=2, padding_mode='replicate'),
             nn.BatchNorm1d(64),
-            nn.LeakyReLU(),
-            ResBlock1d(64, 64, 3)
+            Activation(),
+            ResBlock1d(64, 64, 3, Activation=Activation)
         )
 
         self.rnn = nn.LSTM(input_size=64,
@@ -58,10 +58,21 @@ class CLSTMC(nn.Module):
                            bidirectional=False)
 
         self.conv_out = nn.Sequential(
-            ResBlock1d(64, 128, 3, stride=2),
-            ResBlock1d(128, 256, 3, stride=2)
+            ResBlock1d(64, 128, 3, stride=2, Activation=Activation),
+            ResBlock1d(128, 256, 3, stride=2, Activation=Activation)
         )
-        self.fc = nn.Linear(256, 3)
+        if big_fc:
+            self.fc = nn.Sequential(
+                nn.Linear(256, 512),
+                nn.Dropout(0.2),
+                Activation(),
+                nn.Linear(512, 512),
+                nn.Dropout(0.2),
+                Activation(),
+                nn.Linear(512, 3)
+            )
+        else:
+            self.fc = nn.Linear(256, 3)
 
     def forward(self, x):
         x = x.transpose(1, 2)  # B, S, 6 --> B, 6, S
@@ -78,14 +89,14 @@ class CLSTMC(nn.Module):
 
 
 class CRNNC(nn.Module):
-    def __init__(self, Activation=nn.LeakyReLU):
+    def __init__(self, Activation=nn.LeakyReLU, big_fc=False):
         super(CRNNC, self).__init__()
 
         self.conv_in = nn.Sequential(
-            nn.Conv1d(6, 64, 7, padding=3, groups=2),
+            nn.Conv1d(6, 64, 7, padding=3, groups=2, padding_mode='replicate'),
             nn.BatchNorm1d(64),
             Activation(),
-            ResBlock1d(64, 64, 3)
+            ResBlock1d(64, 64, 3, Activation=Activation)
         )
 
         self.rnn = nn.RNN(input_size=64,
@@ -96,10 +107,21 @@ class CRNNC(nn.Module):
                           bidirectional=False)
 
         self.conv_out = nn.Sequential(
-            ResBlock1d(64, 128, 3, stride=2),
-            ResBlock1d(128, 256, 3, stride=2)
+            ResBlock1d(64, 128, 3, stride=2, Activation=Activation),
+            ResBlock1d(128, 256, 3, stride=2, Activation=Activation)
         )
-        self.fc = nn.Linear(256, 3)
+        if big_fc:
+            self.fc = nn.Sequential(
+                nn.Linear(256, 512),
+                nn.Dropout(0.2),
+                Activation(),
+                nn.Linear(512, 512),
+                nn.Dropout(0.2),
+                Activation(),
+                nn.Linear(512, 3)
+            )
+        else:
+            self.fc = nn.Linear(256, 3)
 
     def forward(self, x):
         x = x.transpose(1, 2)  # B, S, 6 --> B, 6, S
@@ -116,14 +138,14 @@ class CRNNC(nn.Module):
 
 
 class CGRUC(nn.Module):
-    def __init__(self):
+    def __init__(self, Activation=nn.LeakyReLU, big_fc=False):
         super(CGRUC, self).__init__()
 
         self.conv_in = nn.Sequential(
-            nn.Conv1d(6, 64, 7, padding=3, groups=2),
+            nn.Conv1d(6, 64, 7, padding=3, groups=2, padding_mode='replicate'),
             nn.BatchNorm1d(64),
-            nn.LeakyReLU(),
-            ResBlock1d(64, 64, 3)
+            Activation(),
+            ResBlock1d(64, 64, 3, Activation=Activation)
         )
 
         self.rnn = nn.GRU(input_size=64,
@@ -134,103 +156,21 @@ class CGRUC(nn.Module):
                           bidirectional=False)
 
         self.conv_out = nn.Sequential(
-            ResBlock1d(64, 128, 3, stride=2),
-            ResBlock1d(128, 256, 3, stride=2)
+            ResBlock1d(64, 128, 3, stride=2, Activation=Activation),
+            ResBlock1d(128, 256, 3, stride=2, Activation=Activation)
         )
-        self.fc = nn.Linear(256, 3)
-
-    def forward(self, x):
-        x = x.transpose(1, 2)  # B, S, 6 --> B, 6, S
-        x = self.conv_in(x)  # B, 6, S
-        x = x.transpose(1, 2)  # B, S, 6
-
-        outs, _ = self.rnn(x)  # B, S, 128
-        x = outs.transpose(1, 2)  # B, C, S
-        x = self.conv_out(x)  # B, C, S
-        x = x[:, :, -1]  # B, C
-        x = self.fc(x)  # B, 3
-
-        return x
-
-
-class CLSTMCFC(nn.Module):
-    def __init__(self):
-        super(CLSTMCFC, self).__init__()
-
-        self.conv_in = nn.Sequential(
-            nn.Conv1d(6, 64, 7, padding=3, groups=2),
-            nn.BatchNorm1d(64),
-            nn.LeakyReLU(),
-            ResBlock1d(64, 64, 3)
-        )
-
-        self.rnn = nn.LSTM(input_size=64,
-                           hidden_size=64,
-                           num_layers=6,
-                           batch_first=True,
-                           dropout=0.2,
-                           bidirectional=False)
-
-        self.conv_out = nn.Sequential(
-            ResBlock1d(64, 128, 3, stride=2),
-            ResBlock1d(128, 256, 3, stride=2)
-        )
-        self.fc = nn.Sequential(
-            nn.Linear(256, 512),
-            nn.Dropout(0.2),
-            nn.LeakyReLU(),
-            nn.Linear(512, 512),
-            nn.Dropout(0.2),
-            nn.LeakyReLU(),
-            nn.Linear(512, 3)
-        )
-
-    def forward(self, x):
-        x = x.transpose(1, 2)  # B, S, 6 --> B, 6, S
-        x = self.conv_in(x)  # B, 6, S
-        x = x.transpose(1, 2)  # B, S, 6
-
-        outs, _ = self.rnn(x)  # B, S, 128
-        x = outs.transpose(1, 2)  # B, C, S
-        x = self.conv_out(x)  # B, C, S
-        x = x[:, :, -1]  # B, C
-        x = self.fc(x)  # B, 3
-
-        return x
-
-
-class CRNNCFCPReLU(nn.Module):
-    def __init__(self):
-        super(CRNNCFCPReLU, self).__init__()
-
-        self.conv_in = nn.Sequential(
-            nn.Conv1d(6, 64, 7, padding=3, groups=2),
-            nn.BatchNorm1d(64),
-            nn.PReLU(),
-            ResBlock1dPReLU(64, 128, 3, stride=2),
-            ResBlock1dPReLU(128, 256, 3, stride=2)
-        )
-
-        self.rnn = nn.RNN(input_size=256,
-                          hidden_size=128,
-                          num_layers=6,
-                          batch_first=True,
-                          dropout=0.2,
-                          bidirectional=False)
-
-        self.conv_out = nn.Sequential(
-            ResBlock1dPReLU(128, 256, 3, stride=2),
-            ResBlock1dPReLU(256, 512, 3, stride=2)
-        )
-        self.fc = nn.Sequential(
-            nn.Linear(512, 1024),
-            nn.Dropout(0.2),
-            nn.PReLU(),
-            nn.Linear(1024, 1024),
-            nn.Dropout(0.2),
-            nn.PReLU(),
-            nn.Linear(1024, 3)
-        )
+        if big_fc:
+            self.fc = nn.Sequential(
+                nn.Linear(256, 512),
+                nn.Dropout(0.2),
+                Activation(),
+                nn.Linear(512, 512),
+                nn.Dropout(0.2),
+                Activation(),
+                nn.Linear(512, 3)
+            )
+        else:
+            self.fc = nn.Linear(256, 3)
 
     def forward(self, x):
         x = x.transpose(1, 2)  # B, S, 6 --> B, 6, S
@@ -264,3 +204,28 @@ class CRNNC_Tanh(CRNNC):
 class CRNNC_Hardswish(CRNNC):
     def __init__(self):
         super(CRNNC_Hardswish, self).__init__(nn.Hardswish)
+
+
+class CGRUC_Hardswish(CGRUC):
+    def __init__(self):
+        super(CGRUC_Hardswish, self).__init__(nn.Hardswish)
+
+
+class CLSTMC_Hardswish(CLSTMC):
+    def __init__(self):
+        super(CLSTMC_Hardswish, self).__init__(nn.Hardswish)
+
+
+class CRNNC_Hardswish_FC(CRNNC):
+    def __init__(self):
+        super(CRNNC_Hardswish_FC, self).__init__(nn.Hardswish, big_fc=True)
+
+
+class CGRUC_Hardswish_FC(CGRUC):
+    def __init__(self):
+        super(CGRUC_Hardswish_FC, self).__init__(nn.Hardswish, big_fc=True)
+
+
+class CLSTMC_Hardswish_FC(CLSTMC):
+    def __init__(self):
+        super(CLSTMC_Hardswish_FC, self).__init__(nn.Hardswish, big_fc=True)

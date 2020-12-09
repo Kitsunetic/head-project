@@ -5,17 +5,17 @@ import torch.nn as nn
 class ResBlock1d(nn.Module):
     expansion = 1
 
-    def __init__(self, inchannels, channels, kernel_size, stride=1, groups=1):
+    def __init__(self, inchannels, channels, kernel_size, stride=1, groups=1, Activation=nn.LeakyReLU):
         super(ResBlock1d, self).__init__()
 
         self.conv1 = nn.Sequential(
-            nn.Conv1d(inchannels, channels, kernel_size, padding=kernel_size // 2, stride=stride, groups=groups),
+            nn.Conv1d(inchannels, channels, kernel_size, padding=kernel_size // 2, stride=stride, groups=groups, padding_mode='replicate'),
             nn.BatchNorm1d(channels),
-            nn.LeakyReLU(),
-            nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2, groups=groups),
+            Activation(),
+            nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2, groups=groups, padding_mode='replicate'),
             nn.BatchNorm1d(channels)
         )
-        self.act = nn.LeakyReLU()
+        self.act = Activation()
 
         self.conv2 = None
         if inchannels != channels:
