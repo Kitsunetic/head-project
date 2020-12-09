@@ -8,7 +8,7 @@ import torch_burn as tb
 
 
 class HPMetric(tb.metrics.InvisibleMetric):
-    def __init__(self, name: str, history_path, means=[0, 0, 0], stds=[1, 1, 1]):
+    def __init__(self, name: str, history_path, means=[0, 0, 0], stds=[1, 1, 1], logfile=None):
         super(HPMetric, self).__init__(name)
 
         self.means = means
@@ -20,6 +20,10 @@ class HPMetric(tb.metrics.InvisibleMetric):
 
         self.history_path = Path(history_path)
         self.history_path.mkdir(parents=True, exist_ok=True)
+
+        self.logfile = None
+        if logfile is not None:
+            self.logfile = open(self.history_path / logfile, 'w')
 
     def on_train_epoch_end(self, epoch: int, logs: dict):
         # RMS, 99% tile 출력
@@ -33,7 +37,7 @@ class HPMetric(tb.metrics.InvisibleMetric):
         print(f' - RMS          : {rms_v:10f}')
         print(f' - 99% Tile     : {tile99_v:10f}')
         """
-        
+
         self.train_history['yaw'].append(yaw_v)
         self.train_history['pitch'].append(pitch_v)
         self.train_history['roll'].append(roll_v)
@@ -54,6 +58,10 @@ class HPMetric(tb.metrics.InvisibleMetric):
         print(f' - Roll         : {roll_v:10f}')
         print(f' - RMS          : {rms_v:10f}')
         print(f' - 99% Tile     : {tile99_v:10f}')
+        if self.logfile is not None:
+            self.logfile.write(f'Epoch [{epoch:03d}] '
+                               f'Yaw: {yaw_v:.4f}, Pitch: {pitch_v:.4f}, Roll: {roll_v:.4f}, '
+                               f'RMS: {rms_v:.4f}, 99percentile {tile99_v:.4f}\n')
 
         self.valid_history['yaw'].append(yaw_v)
         self.valid_history['pitch'].append(pitch_v)
@@ -66,7 +74,6 @@ class HPMetric(tb.metrics.InvisibleMetric):
             pickle.dump(self.valid_history, f)
 
     def get_value(self, outputs: torch.Tensor, targets: torch.Tensor, is_train: bool):
-        #print((outputs - targets).detach().cpu().shape)
         self.diff.append((outputs - targets).detach().cpu())  # (B, 3)
 
     def _calc_values(self, diff):
@@ -78,12 +85,6 @@ class HPMetric(tb.metrics.InvisibleMetric):
         tile99 = np.percentile(tile, 99)
 
         mrms = rms.mean()
-
-        # diff = radian2degree(diff)
-        # tile = diff.flatten().numpy()
-        # tile99 = np.percentile(tile, 99)
-
         mdiff = diff.mean(dim=0)
-        # rms = (mdiff.square().sum() / 3).sqrt()
 
         return mdiff[0].item(), mdiff[1].item(), mdiff[2].item(), mrms.item(), tile99

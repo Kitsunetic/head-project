@@ -53,8 +53,10 @@ class SingleFileDataset(Dataset):
         if means is None or stds is None:
             # self.means = torch.tensor([self.X[..., i].mean() for i in range(6)], dtype=torch.float32)
             # self.stds = torch.tensor([self.X[..., i].std() for i in range(6)], dtype=torch.float32)
-            self.means = torch.tensor([-2.5188, 7.4404, 0.0633, 0.2250, 9.5808, -1.0252], dtype=torch.float32)
-            self.stds = torch.tensor([644.7101, 80.9247, 11.4308, 0.4956, 0.0784, 2.3869], dtype=torch.float32)
+            # self.means = torch.tensor([-2.5188, 7.4404, 0.0633, 0.2250, 9.5808, -1.0252], dtype=torch.float32)
+            # self.stds = torch.tensor([644.7101, 80.9247, 11.4308, 0.4956, 0.0784, 2.3869], dtype=torch.float32)
+            self.means = torch.tensor([0, 0, 0, 0, 0, 0], dtype=torch.float32)
+            self.stds = torch.tensor([1, 1, 1, 1, 1, 1], dtype=torch.float32)
         else:
             self.means = means
             self.stds = stds

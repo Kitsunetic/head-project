@@ -42,7 +42,7 @@ def main(args):
     criterion = nn.MSELoss().cuda()
     optimizer = torch_optimizer.RAdam(model.parameters())
 
-    hp_metric = HPMetric('hp_metric', args.experiment_path, ds_train.means[:3], ds_train.stds[:3])
+    hp_metric = HPMetric('hp_metric', args.experiment_path, ds_train.means[:3], ds_train.stds[:3], 'history.log')
     metrics = [
         tb.metrics.ModuleMetric(criterion, 'loss'),
         hp_metric
