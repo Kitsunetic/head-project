@@ -17,6 +17,17 @@ from training_loop.metrics import HPMetric
 from training_loop.networks import get_model_by_name
 
 
+def annot_min(x, y, name, ax=None):
+    xmax = x[np.argmin(y)]
+    ymax = min(y)
+    text = f"epoch={xmax:.3f}, {name} {ymax:.3f}"
+    if not ax:
+        ax = plt.gca()
+    # arrowprops = dict(facecolor='black', shrink=0.7)
+    arrowprops = dict(arrowstyle='->', connectionstyle="angle,angleA=0,angleB=60")
+    ax.annotate(text, xy=(xmax, ymax), xytext=(xmax - 5, ymax - 2), arrowprops=arrowprops)
+
+
 def main(args):
     tb.seed_everything(args.seed)
 
@@ -191,7 +202,7 @@ def main(args):
     plt.savefig(args.experiment_path / f'TrainingResult_{L}-Roll.png')
 
     # Save loss history
-    epochs_x = list(range(1, args.epochs + 1))
+    epochs_x = np.array(list(range(1, args.epochs + 1)), dtype=np.int)
     plt.figure(figsize=(height, width))
     plt.plot(epochs_x, hp_metric.train_history['yaw'])
     plt.plot(epochs_x, hp_metric.train_history['pitch'])
@@ -199,6 +210,9 @@ def main(args):
     plt.plot(epochs_x, hp_metric.train_history['rms'])
     plt.plot(epochs_x, hp_metric.train_history['tile99'])
     plt.legend(['Yaw', 'Pitch', 'Roll', 'RMS', '99Percentile'])
+    annot_min(epochs_x, np.array(hp_metric.train_history['yaw']), 'yaw')
+    annot_min(epochs_x, np.array(hp_metric.train_history['rms']), 'rms')
+    annot_min(epochs_x, np.array(hp_metric.train_history['tile99']), '99tile')
     plt.xlabel('Epoch (Numbers)')
     plt.ylabel('Mean Error (Degree)')
     plt.ylim(0, 25)
@@ -213,6 +227,9 @@ def main(args):
     plt.plot(epochs_x, hp_metric.valid_history['rms'])
     plt.plot(epochs_x, hp_metric.valid_history['tile99'])
     plt.legend(['Yaw', 'Pitch', 'Roll', 'RMS', '99Percentile'])
+    annot_min(epochs_x, np.array(hp_metric.valid_history['yaw']), 'yaw')
+    annot_min(epochs_x, np.array(hp_metric.valid_history['rms']), 'rms')
+    annot_min(epochs_x, np.array(hp_metric.valid_history['tile99']), '99tile')
     plt.xlabel('Epoch (Numbers)')
     plt.ylabel('Mean Error (Degree)')
     plt.ylim(0, 25)
