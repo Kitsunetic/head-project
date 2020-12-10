@@ -17,15 +17,22 @@ from training_loop.metrics import HPMetric
 from training_loop.networks import get_model_by_name
 
 
-def annot_min(x, y, name, ax=None):
-    xmax = x[np.argmin(y)]
-    ymax = min(y)
+def annot_min(x, y, name, ax=None, xpos=None):
+    if xpos is None:
+        xpos = np.argmin(y)
+        xmax = x[xpos]
+        ymax = min(y)
+    else:
+        xmax = x[xpos]
+        ymax = y[xpos]
     text = f"epoch={xmax:.3f}, {name} {ymax:.3f}"
     if not ax:
         ax = plt.gca()
     # arrowprops = dict(facecolor='black', shrink=0.7)
     arrowprops = dict(arrowstyle='->', connectionstyle="angle,angleA=0,angleB=60")
     ax.annotate(text, xy=(xmax, ymax), xytext=(xmax - 5, ymax - 2), arrowprops=arrowprops)
+
+    return xpos
 
 
 def main(args):
@@ -210,9 +217,11 @@ def main(args):
     plt.plot(epochs_x, hp_metric.train_history['rms'])
     plt.plot(epochs_x, hp_metric.train_history['tile99'])
     plt.legend(['Yaw', 'Pitch', 'Roll', 'RMS', '99Percentile'])
-    annot_min(epochs_x, np.array(hp_metric.train_history['yaw']), 'yaw')
-    annot_min(epochs_x, np.array(hp_metric.train_history['rms']), 'rms')
-    annot_min(epochs_x, np.array(hp_metric.train_history['tile99']), '99tile')
+    xpos = annot_min(epochs_x, np.array(hp_metric.train_history['tile99']), '99tile')
+    annot_min(epochs_x, np.array(hp_metric.train_history['yaw']), 'yaw', xpos=xpos)
+    annot_min(epochs_x, np.array(hp_metric.train_history['pitch']), 'pitch', xpos=xpos)
+    annot_min(epochs_x, np.array(hp_metric.train_history['roll']), 'roll', xpos=xpos)
+    annot_min(epochs_x, np.array(hp_metric.train_history['rms']), 'rms', xpos=xpos)
     plt.xlabel('Epoch (Numbers)')
     plt.ylabel('Mean Error (Degree)')
     plt.ylim(0, 25)
@@ -227,9 +236,11 @@ def main(args):
     plt.plot(epochs_x, hp_metric.valid_history['rms'])
     plt.plot(epochs_x, hp_metric.valid_history['tile99'])
     plt.legend(['Yaw', 'Pitch', 'Roll', 'RMS', '99Percentile'])
-    annot_min(epochs_x, np.array(hp_metric.valid_history['yaw']), 'yaw')
-    annot_min(epochs_x, np.array(hp_metric.valid_history['rms']), 'rms')
-    annot_min(epochs_x, np.array(hp_metric.valid_history['tile99']), '99tile')
+    xpos = annot_min(epochs_x, np.array(hp_metric.valid_history['tile99']), '99tile')
+    annot_min(epochs_x, np.array(hp_metric.valid_history['yaw']), 'yaw', xpos=xpos)
+    annot_min(epochs_x, np.array(hp_metric.valid_history['pitch']), 'pitch', xpos=xpos)
+    annot_min(epochs_x, np.array(hp_metric.valid_history['roll']), 'roll', xpos=xpos)
+    annot_min(epochs_x, np.array(hp_metric.valid_history['rms']), 'rms', xpos=xpos)
     plt.xlabel('Epoch (Numbers)')
     plt.ylabel('Mean Error (Degree)')
     plt.ylim(0, 25)
