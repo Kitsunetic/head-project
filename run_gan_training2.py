@@ -72,10 +72,10 @@ class ResBlock1d(nn.Module):
         super(ResBlock1d, self).__init__()
 
         self.conv1 = nn.Sequential(
-            nn.Conv1d(inchannels, channels, kernel_size, padding=kernel_size // 2, stride=stride, groups=groups),
+            nn.Conv1d(inchannels, channels, kernel_size, padding=kernel_size // 2, stride=stride, groups=groups, padding_mode='replicate'),
             nn.BatchNorm1d(channels),
             nn.LeakyReLU(),
-            nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2, groups=groups),
+            nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2, groups=groups, padding_mode='replicate'),
             nn.BatchNorm1d(channels)
         )
         self.act = nn.LeakyReLU()
@@ -83,7 +83,7 @@ class ResBlock1d(nn.Module):
         self.conv2 = None
         if inchannels != channels:
             self.conv2 = nn.Sequential(
-                nn.Conv1d(inchannels, channels, 1, stride=stride, groups=groups),
+                nn.Conv1d(inchannels, channels, 1, stride=stride, groups=groups, padding_mode='replicate'),
                 nn.BatchNorm1d(channels)
             )
 
@@ -151,17 +151,21 @@ class GModel(nn.Module):
         super(GModel, self).__init__()
 
         self.conv = nn.Sequential(
-            nn.Conv1d(3, 64, 3, padding=1),
+            nn.Conv1d(3, 64, 3, padding=1, padding_mode='replicate'),
             nn.BatchNorm1d(64),
             nn.Hardswish(),
-            nn.Conv1d(64, 64, 3, padding=1),
-            nn.BatchNorm1d(64),
-            nn.Hardswish(),
-            nn.Conv1d(64, 3, 1)
+            ResBlock1d(64, 64, 3),
+            ResBlock1d(64, 128, 3),
+            ResBlock1d(128, 128, 3),
+            ResBlock1d(128, 256, 3),
+            ResBlock1d(256, 256, 3),
+            ResBlock1d(256, 512, 3),
+            ResBlock1d(512, 512, 3),
+            nn.Conv1d(512, 3, 1)
         )
 
     def forward(self, x):
-        x = self.conv(x)  # B, 3, W
+        x = self.conv(x)
         return x
 
 
@@ -215,11 +219,11 @@ def main(args):
     g_optimizer = torch_optimizer.RAdam(G.parameters())
     d_optimizer = torch_optimizer.RAdam(D.parameters())
 
-    valve = 2
-    valvecut = 40
+    valve = 4
+    valvecut = 20
     dirty_dataset = True
     for epoch in range(1, args.epochs + 1):
-        if epoch % valvecut < valve:
+        if epoch % valvecut <= valve:
             # ===============================================================
             #                      Train Q
             # ===============================================================
