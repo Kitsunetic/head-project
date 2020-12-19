@@ -37,6 +37,7 @@ def annot_min(x, y, name, ax=None, xpos=None):
 
 def main(args):
     tb.seed_everything(args.seed)
+    plt.switch_backend('agg')
 
     # Create dataset
     """

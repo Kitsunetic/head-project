@@ -5,11 +5,9 @@ Q모델은 shuffle을 안하면 학습이 느려진다는 특징 --> 일반적�
 GAN 모델들은 학습이 잘 안됨
 """
 import argparse
-import math
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,25 +16,15 @@ import torch.nn as nn
 import torch_burn as tb
 import torch_optimizer
 from torch import Tensor
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset
 
 from training_loop.data import SingleFileDataset
 from training_loop.networks.crnnc import CRNNC_Hardswish
 
-MEANS = torch.tensor([-2.5188, 7.4404, 0.0633, 0.2250, 9.5808, -1.0252], dtype=torch.float32)
-STDS = torch.tensor([644.7101, 80.9247, 11.4308, 0.4956, 0.0784, 2.3869], dtype=torch.float32)
-
-plot_idx = -1
-
-
-def proportional_random_split(ds: Dataset, proportions: Sequence[float]):
-    L = len(ds)
-    S = [math.floor(L * p) for p in proportions]
-    vestige = L - sum(S)
-    for i in range(vestige): # vestige should be lesser or same with length of S
-        S[i] += 1
-    out_ds_list = random_split(ds, S)
-    return out_ds_list
+# MEANS = torch.tensor([-2.5188, 7.4404, 0.0633, 0.2250, 9.5808, -1.0252], dtype=torch.float32)
+# STDS = torch.tensor([644.7101, 80.9247, 11.4308, 0.4956, 0.0784, 2.3869], dtype=torch.float32)
+MEANS = torch.tensor([0, 0, 0, 0, 0, 0], dtype=torch.float32)
+STDS = torch.tensor([1, 1, 1, 1, 1, 1], dtype=torch.float32)
 
 
 class GANDataset(Dataset):
@@ -72,10 +60,12 @@ class ResBlock1d(nn.Module):
         super(ResBlock1d, self).__init__()
 
         self.conv1 = nn.Sequential(
-            nn.Conv1d(inchannels, channels, kernel_size, padding=kernel_size // 2, stride=stride, groups=groups, padding_mode='replicate'),
+            nn.Conv1d(inchannels, channels, kernel_size, padding=kernel_size // 2, stride=stride, groups=groups,
+                      padding_mode='replicate'),
             nn.BatchNorm1d(channels),
             nn.LeakyReLU(),
-            nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2, groups=groups, padding_mode='replicate'),
+            nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2, groups=groups,
+                      padding_mode='replicate'),
             nn.BatchNorm1d(channels)
         )
         self.act = nn.LeakyReLU()
@@ -192,6 +182,47 @@ def plot_results(experiment_name: str, epoch: int, name: str, result_dir: Path, 
     plt.close()
 
 
+def annot_min(x, y, name, ax=None, xpos=None):
+    if xpos is None:
+        xpos = np.argmin(y)
+        xmax = x[xpos]
+        ymax = min(y)
+    else:
+        xmax = x[xpos]
+        ymax = y[xpos]
+    text = f"epoch={xmax:.3f}, {name} {ymax:.3f}"
+    if not ax:
+        ax = plt.gca()
+    # arrowprops = dict(facecolor='black', shrink=0.7)
+    arrowprops = dict(arrowstyle='->', connectionstyle="angle,angleA=0,angleB=60")
+    ax.annotate(text, xy=(xmax, ymax), xytext=(xmax - 5, ymax - 2), arrowprops=arrowprops)
+
+    return xpos
+
+
+def plot_error_history(args, name, history):
+    epoch = len(history[f'{name}:loss'])
+    X = np.linspace(0, epoch, epoch)
+
+    plt.figure(figsize=(6, 6))
+    plt.plot(X, history[f'{name}:yaw'])
+    plt.plot(X, history[f'{name}:pitch'])
+    plt.plot(X, history[f'{name}:roll'])
+    plt.plot(X, history[f'{name}:rms'])
+    plt.plot(X, history[f'{name}:tile99'])
+    plt.legend(['Yaw', 'Pitch', 'Roll', 'RMS', '99%ile'])
+    xpos = annot_min(X, np.array(history[f'{name}:tile99']), '99tile')
+    annot_min(X, np.array(history[f'{name}:yaw']), 'yaw', xpos=xpos)
+    annot_min(X, np.array(history[f'{name}:pitch']), 'pitch', xpos=xpos)
+    annot_min(X, np.array(history[f'{name}:roll']), 'roll', xpos=xpos)
+    annot_min(X, np.array(history[f'{name}:rms']), 'rms', xpos=xpos)
+    plt.xlabel('Epochs')
+    plt.ylabel('Error (Degree)')
+    plt.ylim(0, 25)
+    plt.tight_layout()
+    plt.savefig(args.experiment_path / 'error_plot-Q.png')
+
+
 def main(args):
     tb.seed_everything(args.seed)
     plt.switch_backend('agg')
@@ -219,9 +250,10 @@ def main(args):
     g_optimizer = torch_optimizer.RAdam(G.parameters())
     d_optimizer = torch_optimizer.RAdam(D.parameters())
 
-    valve = 4
-    valvecut = 20
+    valve = 5
+    valvecut = 15
     dirty_dataset = True
+    history = defaultdict(list)
     for epoch in range(1, args.epochs + 1):
         if epoch % valvecut <= valve:
             # ===============================================================
@@ -234,7 +266,7 @@ def main(args):
                 x = x_.cuda()
                 y = y_.cuda()
                 p = Q(x)
-                
+
                 loss = q_criterion(p, y)
                 q_optimizer.zero_grad()
                 loss.backward()
@@ -242,45 +274,52 @@ def main(args):
                 losses.append(loss.item())
             mean_loss = sum(losses) / len(losses)
             print(f'[{epoch:03d}/{args.epochs:03d}] Train Q: loss {mean_loss:.4f}')
-        
+
             # ===============================================================
             #                      Validate Q
             # ===============================================================
             Q.eval()
             with torch.no_grad():
-                history = defaultdict(list)
+                history['Q:x'] = []
+                history['Q:y'] = []
+                history['Q:p'] = []
                 diffs = []
-                X_input = []
-                X_real = []
                 losses = []
                 for x_, y_ in dl_q_test:
                     x = x_.cuda()
                     y = y_.cuda()
                     p = Q(x)
                     p_ = p.cpu()
-                    
+
                     loss = q_criterion(p, y)
                     losses.append(loss.item())
-                    history[f'Q:x'].append(x_[:, -1, :])
-                    history[f'Q:y'].append(y_)
-                    history[f'Q:p'].append(p_)
-                    
+                    history['Q:x'].append(x_[:, -1, :])
+                    history['Q:y'].append(y_)
+                    history['Q:p'].append(p_)
                     diffs.append(p_ - y_)
                 mean_loss = sum(losses) / len(losses)
                 diffs = torch.cat(diffs)  # (B, 3)
                 mae = diffs.abs().mean(dim=0)  # (3, ) --> yaw, pitch, roll
                 rms = mae.square().sum().div(3).sqrt()  # (1, )
-                tile = diffs.abs().mean(dim=1).numpy()  # (B, )
+                tile = diffs.square().mean(dim=1).sqrt().numpy()  # (B, )
                 tile99 = np.percentile(tile, 99)
                 print(f'[{epoch:03d}/{args.epochs:03d}] Validate Q: '
-                    f'loss {mean_loss:.4f}, '
-                    f'yaw {mae[0].item():.4f}, '
-                    f'pitch {mae[1].item():.4f}, '
-                    f'roll {mae[2].item():.4f}, '
-                    f'rms {rms.item():.4f}, '
-                    f'tile99 {tile99:.4f}')
-                
+                      f'loss {mean_loss:.4f}, '
+                      f'yaw {mae[0].item():.4f}, '
+                      f'pitch {mae[1].item():.4f}, '
+                      f'roll {mae[2].item():.4f}, '
+                      f'rms {rms.item():.4f}, '
+                      f'tile99 {tile99:.4f}')
+                history['Q:loss'].append(mean_loss)
+                history['Q:yaw'].append(mae[0].item())
+                history['Q:pitch'].append(mae[1].item())
+                history['Q:roll'].append(mae[2].item())
+                history['Q:rms'].append(rms.item())
+                history['Q:tile99'].append(tile99)
+
                 plot_results(args.experiment_name, epoch, 'Q', args.experiment_path, history)
+                if epoch > 20:
+                    plot_error_history(args, 'Q', history)
         else:
             # ===============================================================
             #                      Make dataset for GAN
@@ -297,8 +336,9 @@ def main(args):
                     X_input = torch.cat(X_input)
                     X_real = torch.cat(X_real)
                     ds_gan_train = GANDataset(X_input, X_real, args.window_size, MEANS, STDS)
-                    dl_gan_train = DataLoader(ds_gan_train, batch_size=args.batch_size, shuffle=True, num_workers=2, pin_memory=True)
-                    
+                    dl_gan_train = DataLoader(ds_gan_train, batch_size=args.batch_size,
+                                              shuffle=True, num_workers=2, pin_memory=True)
+
                     X_input, X_real = [], []
                     for dl in dl_tests:
                         for x, y in dl:
@@ -308,10 +348,11 @@ def main(args):
                     X_input = torch.cat(X_input)
                     X_real = torch.cat(X_real)
                     ds_gan_test = GANDataset(X_input, X_real, args.window_size, MEANS, STDS)
-                    dl_gan_test = DataLoader(ds_gan_test, batch_size=args.batch_size, shuffle=False, num_workers=2, pin_memory=True)
-                    
+                    dl_gan_test = DataLoader(ds_gan_test, batch_size=args.batch_size,
+                                             shuffle=False, num_workers=2, pin_memory=True)
+
                 dirty_dataset = False
-            
+
             # ===============================================================
             #                      Train GAN
             # ===============================================================
@@ -351,14 +392,12 @@ def main(args):
                 losses[5].append(g_loss.item())
 
             losses = [sum(l) / len(l) for l in losses]
-            print(f'[{epoch:03d}/{args.epochs:03d}] Train D: '
-                f'd_loss: {losses[2]:.4f}, '
-                f'd_loss_real: {losses[0]:.4f}, '
-                f'd_loss_fake: {losses[1]:.4f}')
-            print(f'[{epoch:03d}/{args.epochs:03d}] Train G: '
-                f'g_loss: {losses[5]:.4f}, '
-                f'g_loss_real: {losses[3]:.4f}, '
-                f'g_loss_fake: {losses[4]:.4f}')
+            print(f'[{epoch:03d}/{args.epochs:03d}] Train GAN: '
+                  f'd_loss: {losses[2]:.4f}, '
+                  f'd_loss_real: {losses[0]:.4f}, '
+                  f'd_loss_fake: {losses[1]:.4f}, '
+                  f'g_loss: {losses[5]:.4f}, '
+                  f'g_loss_fake: {losses[4]:.4f}')
 
             # ===============================================================
             #                      Validate GAN
@@ -366,7 +405,9 @@ def main(args):
             with torch.no_grad():
                 G.eval()
                 D.eval()
-                history = defaultdict(list)
+                history['GAN:x'] = []
+                history['GAN:y'] = []
+                history['GAN:p'] = []
                 losses = [[], [], [], [], [], []]
                 diffs = []
                 for x_input, x_real in dl_gan_test:
@@ -390,7 +431,7 @@ def main(args):
                     p_fake = D(x_fake)
                     g_loss_real = g_criterion(x_fake, x_real)
                     g_loss_fake = d_criterion(p_fake, y_fake)
-                    g_loss = g_loss_real * 0.2 + g_loss_fake * 0.8
+                    g_loss = g_loss_real * 0.1 + g_loss_fake * 0.9
                     losses[3].append(g_loss_real.item())
                     losses[4].append(g_loss_fake.item())
                     losses[5].append(g_loss.item())
@@ -400,31 +441,44 @@ def main(args):
                     y = x_real[:, :, -1].cpu() * STDS[:3] + MEANS[:3]
                     p = x_fake[:, :, -1].cpu() * STDS[:3] + MEANS[:3]
                     diffs.append(y - p)
-                    history[f'GAN:x'].append(x)
-                    history[f'GAN:y'].append(y)
-                    history[f'GAN:p'].append(p)
-                
+                    history['GAN:x'].append(x)
+                    history['GAN:y'].append(y)
+                    history['GAN:p'].append(p)
+
                 losses = [sum(l) / len(l) for l in losses]
                 print(f'[{epoch:03d}/{args.epochs:03d}] Validate GAN: '
-                    f'd_loss: {losses[2]:.4f}, '
-                    f'd_loss_real: {losses[0]:.4f}, '
-                    f'd_loss_fake: {losses[1]:.4f}, ',
-                    f'g_loss: {losses[5]:.4f}, '
-                    f'g_loss_real: {losses[3]:.4f}')
+                      f'd_loss: {losses[2]:.4f}, '
+                      f'd_loss_real: {losses[0]:.4f}, '
+                      f'd_loss_fake: {losses[1]:.4f}, ',
+                      f'g_loss: {losses[5]:.4f}, '
+                      f'g_loss_real: {losses[3]:.4f}')
+                history['GAN:d_loss_real'].append(losses[0])
+                history['GAN:d_loss_fake'].append(losses[1])
+                history['GAN:d_loss'].append(losses[2])
+                history['GAN:g_loss_real'].append(losses[3])
+                history['GAN:g_loss_fake'].append(losses[4])
+                history['GAN:g_loss'].append(losses[5])
 
                 diffs = torch.cat(diffs)  # (B, 3)
                 mae = diffs.abs().mean(dim=0)  # (3, ) --> yaw, pitch, roll
                 rms = mae.square().sum().div(3).sqrt()  # (1, )
-                tile = diffs.abs().mean(dim=1).numpy()  # (B, )
+                tile = diffs.square().mean(dim=1).sqrt().numpy()  # (B, )
                 tile99 = np.percentile(tile, 99)
-                print(f'[{epoch:03d}/{args.epochs:03d}] Validation GAN: '
-                    f'yaw {mae[0].item():.4f}, '
-                    f'pitch {mae[1].item():.4f}, '
-                    f'roll {mae[2].item():.4f}, '
-                    f'rms {rms.item():.4f}, '
-                    f'tile99 {tile99:.4f}')
-            
+                print(f'[{epoch:03d}/{args.epochs:03d}] Validate GAN: '
+                      f'yaw {mae[0].item():.4f}, '
+                      f'pitch {mae[1].item():.4f}, '
+                      f'roll {mae[2].item():.4f}, '
+                      f'rms {rms.item():.4f}, '
+                      f'tile99 {tile99:.4f}')
+                history['GAN:yaw'].append(mae[0].item())
+                history['GAN:pitch'].append(mae[1].item())
+                history['GAN:roll'].append(mae[2].item())
+                history['GAN:rms'].append(rms.item())
+                history['GAN:tile99'].append(tile99)
+
                 plot_results(args.experiment_name, epoch, 'GAN', args.experiment_path, history)
+                if epoch > 20:
+                    plot_error_history(args, 'Q', history)
 
 
 if __name__ == '__main__':
