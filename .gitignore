@@ -137,7 +137,5 @@ dmypy.json
 *.zip
 /GAN-test/samples
 *.npy
-./results
 *.npz
-results
-results2
+results*
