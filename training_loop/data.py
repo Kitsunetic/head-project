@@ -43,32 +43,12 @@ class CSVSequentialDataset(Dataset):
 
 
 class SingleFileDataset(Dataset):
-    def __init__(self, dataset_file, means: Tensor = None, stds: Tensor = None):
+    def __init__(self, dataset_file):
         super(SingleFileDataset, self).__init__()
 
         data = np.load(dataset_file)
         self.X = torch.tensor(data['X'], dtype=torch.float32)
         self.Y = torch.tensor(data['Y'], dtype=torch.float32)
-
-        if means is None or stds is None:
-            # self.means = torch.tensor([self.X[..., i].mean() for i in range(6)], dtype=torch.float32)
-            # self.stds = torch.tensor([self.X[..., i].std() for i in range(6)], dtype=torch.float32)
-            # self.means = torch.tensor([-2.5188, 7.4404, 0.0633, 0.2250, 9.5808, -1.0252], dtype=torch.float32)
-            # self.stds = torch.tensor([644.7101, 80.9247, 11.4308, 0.4956, 0.0784, 2.3869], dtype=torch.float32)
-            self.means = torch.tensor([0, 0, 0, 0, 0, 0], dtype=torch.float32)
-            self.stds = torch.tensor([1, 1, 1, 1, 1, 1], dtype=torch.float32)
-        else:
-            self.means = means
-            self.stds = stds
-        means = self.means.reshape(1, 1, 6)
-        stds = self.stds.reshape(1, 1, 6)
-        self.X = (self.X - means) / stds
-        if len(self.Y.shape) == 2:
-            # M_to_1 dataset
-            self.Y = (self.Y - means[:, 0, :3]) / stds[:, 0, :3]
-        else:
-            # M_to_M dataset
-            self.Y = (self.Y - means[..., :3]) / stds[..., :3]
 
     def __len__(self):
         return len(self.X)

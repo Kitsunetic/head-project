@@ -8,11 +8,8 @@ import torch_burn as tb
 
 
 class HPMetric(tb.metrics.InvisibleMetric):
-    def __init__(self, name: str, history_path, means=[0, 0, 0], stds=[1, 1, 1], logfile=None):
+    def __init__(self, name: str, history_path, logfile=None):
         super(HPMetric, self).__init__(name)
-
-        self.means = means
-        self.stds = stds
 
         self.diff = []
         self.train_history = defaultdict(list)
@@ -78,8 +75,6 @@ class HPMetric(tb.metrics.InvisibleMetric):
 
     def _calc_values(self, diff):
         diff = torch.cat(diff).abs_()  # (D, 3)
-        for i in range(3):
-            diff[:, i] *= self.stds[i]
         rms = (diff.square().sum(1) / 3).sqrt()
         tile = rms.flatten().numpy()
         tile99 = np.percentile(tile, 99)
