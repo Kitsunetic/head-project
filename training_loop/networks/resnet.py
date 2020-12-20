@@ -89,7 +89,7 @@ class ResNet1d(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool1d(1)
 
-        self.fc = nn.Linear(512 * block.expansion, 3)
+        self.fc = nn.Linear(512 * block.channels, 3)
 
     def forward(self, x):
         x = x.transpose(1, 2)  # B, S, 6 --> B, 6, S
@@ -109,7 +109,7 @@ class ResNet1d(nn.Module):
     def _make_layer(self, block, channels, blocks, stride=1):
         layers = []
         layers.append(block(self.inchannels, channels, 3, stride=stride))
-        self.inchannels = channels * block.expansion
+        self.inchannels = channels * block.channels
         for _ in range(1, blocks):
             layers.append(block(self.inchannels, channels, 3))
 

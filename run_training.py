@@ -258,6 +258,7 @@ if __name__ == '__main__':
     argparser.add_argument('--network', type=str, required=True)
     argparser.add_argument('--dataset', type=str, required=True)
     argparser.add_argument('--result', type=str, default='results')
+    argparser.add_argument('--comment', type=str, default='')
 
     args = argparser.parse_args(sys.argv[1:])
     args.result = Path(args.result)
@@ -269,8 +270,9 @@ if __name__ == '__main__':
             dirs.append(f)
     dirs = sorted(dirs)
     experiment_number = int(dirs[-1].name[:4]) + 1 if dirs else 0
+    comment = f'-{args.comment}' if args.comment else ''
     experiment_name = f'{experiment_number:04d}-{args.network}-win_{args.window_size}' \
-                      f'-epoch_{args.epochs:02d}-batch_size_{args.batch_size}'
+                      f'-epoch_{args.epochs:02d}-batch_size_{args.batch_size}{comment}'
     args.experiment_path = args.result / experiment_name
     print('Experiment Path:', args.experiment_path)
 

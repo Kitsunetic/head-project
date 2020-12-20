@@ -110,18 +110,7 @@ class CRNNC(nn.Module):
             ResBlock1d(64, 128, 3, stride=2, Activation=Activation),
             ResBlock1d(128, 256, 3, stride=2, Activation=Activation)
         )
-        if big_fc:
-            self.fc = nn.Sequential(
-                nn.Linear(256, 512),
-                nn.Dropout(0.2),
-                Activation(),
-                nn.Linear(512, 512),
-                nn.Dropout(0.2),
-                Activation(),
-                nn.Linear(512, 3)
-            )
-        else:
-            self.fc = nn.Linear(256, 3)
+        self.fc = nn.Linear(256, 3)
 
     def forward(self, x):
         x = x.transpose(1, 2)  # B, S, 6 --> B, 6, S

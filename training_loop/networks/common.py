@@ -5,6 +5,7 @@ from .crnnc import CGRUC, CLSTM, CLSTMC, CRNNC
 from .crnnc import CGRUC_Hardswish, CLSTMC_Hardswish, CRNNC_Hardswish
 from .crnnc import CGRUC_Hardswish_FC, CLSTMC_Hardswish_FC, CRNNC_Hardswish_FC
 from .crnnc import CRNNC5, CRNNC_PReLU, CRNNC_ReLU, CRNNC_Tanh
+from .inception import InceptionModel
 from .mlp import MLPBasedNet, MultiLayerPerceptron, SecondLayerPerceptron, SingleLayerPerceptron
 from .resnet import ResNet15
 from .rnn import BidirectionalStackedGRU, BidirectionalStackedLSTM, BidirectionalStackedRNN
@@ -28,7 +29,8 @@ _network_map = _make_map(SingleLayerPerceptron, SecondLayerPerceptron, MultiLaye
                          CRNNC_PReLU, CRNNC_ReLU, CRNNC_Hardswish, CRNNC_Tanh,
                          CLSTMC_Hardswish, CGRUC_Hardswish, CRNNC_Hardswish,
                          CLSTMC_Hardswish_FC, CGRUC_Hardswish_FC, CRNNC_Hardswish_FC,
-                         CRNNC5)
+                         CRNNC5,
+                         InceptionModel)
 
 
 def get_model_by_name(name, *args, **kwargs) -> nn.Module:

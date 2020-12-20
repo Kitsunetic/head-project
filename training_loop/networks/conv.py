@@ -5,9 +5,9 @@ def conv_block(inchannels, channels, kernel_size):
     p = kernel_size // 2
 
     return nn.Sequential(
-        nn.Conv1d(inchannels, channels, kernel_size, padding=p),
+        nn.Conv1d(inchannels, channels, kernel_size, padding=p, padding_mode='replicate'),
         nn.BatchNorm1d(channels),
-        nn.LeakyReLU(inplace=True)
+        nn.Hardswish(inplace=True)
     )
 
 
@@ -25,10 +25,10 @@ class CNNBasedNet(nn.Module):
 
             nn.Linear(256, 512),
             nn.Dropout(0.2),
-            nn.LeakyReLU(inplace=True),
+            nn.Hardswish(inplace=True),
             nn.Linear(512, 1024),
             nn.Dropout(0.2),
-            nn.LeakyReLU(inplace=True),
+            nn.Hardswish(inplace=True),
             nn.Linear(1024, 3)
         )
 
