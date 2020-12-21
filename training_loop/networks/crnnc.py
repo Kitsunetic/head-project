@@ -205,9 +205,6 @@ class CRNNC5(nn.Module):
             nn.Linear(512, 1024),
             nn.Dropout(0.2),
             nn.Hardswish(),
-            nn.Linear(1024, 512),
-            nn.Dropout(0.2),
-            nn.Hardswish(),
             nn.Linear(512, 3)
         )
 
