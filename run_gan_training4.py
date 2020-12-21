@@ -6,7 +6,6 @@ GAN 모델들은 학습이 잘 안됨
 """
 import argparse
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -17,6 +16,7 @@ import torch_burn as tb
 import torch_optimizer
 from torch.utils.data import DataLoader, Dataset
 
+from training_loop.networks.crnnc import CRNNC_Hardswish
 from training_loop.networks.resnet import ResBlock1d
 
 # MEANS = torch.tensor([-2.5188, 7.4404, 0.0633, 0.2250, 9.5808, -1.0252], dtype=torch.float32)
@@ -34,7 +34,7 @@ class GANDataset(Dataset):
         self.X = torch.tensor(X, dtype=torch.float32)
         self.Y = torch.tensor(Y, dtype=torch.float32)
         self.X = (self.X - MEANS.reshape(1, 1, 6)) / STDS.reshape(1, 1, 6)
-        self.Y = (self.Y - MEANS[:3].reshape(1, 1, 3)) / STDS[:3].reshape(1, 1, 3)
+        self.Y = (self.Y - MEANS[:3].reshape(1, 3)) / STDS[:3].reshape(1, 3)
 
     def __len__(self):
         return self.X.shape[0]
@@ -52,7 +52,7 @@ class ConvDetector(nn.Module):
         self.inchannels = 64
 
         self.conv1 = nn.Sequential(
-            nn.Conv1d(3, self.inchannels, 7, stride=2, padding=3, padding_mode='replicate', bias=False),
+            nn.Conv1d(6, self.inchannels, 7, stride=2, padding=3, padding_mode='replicate', bias=False),
             nn.BatchNorm1d(64),
             nn.ReLU()
         )
@@ -63,11 +63,25 @@ class ConvDetector(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool1d(1)
-        self.fc = nn.Linear(512 * block.expansion, 1)
+
+        self.ylinear = nn.Sequential(
+            nn.Linear(3, 32),
+            nn.Hardswish(),
+            nn.Linear(32, 64)
+        )
+
+        self.fc = nn.Sequential(
+            nn.Linear(512 * block.expansion + 64, 256),
+            nn.Dropout(0.2),
+            nn.Hardswish(),
+            nn.Linear(256, 1)
+        )
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x):
-        x = x.transpose(1, 2)
+    def forward(self, x, y):
+        # x: B, 6, 120
+        # y: B, 3
+        x = x.transpose(1, 2)  # BSC --> BCS
         x = self.conv1(x)
         x = self.maxpool(x)
 
@@ -77,11 +91,14 @@ class ConvDetector(nn.Module):
         x = self.layer4(x)
 
         x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.fc(x)
-        x = self.sigmoid(x)
+        x = torch.flatten(x, 1)  # B, 512
 
-        return x
+        y = self.ylinear(y)
+        h = torch.cat([x, y], dim=1)  # B, 512 + 128
+        h = self.fc(h)
+        h = self.sigmoid(h)
+
+        return h
 
     def _make_layer(self, block, channels, blocks, stride=1):
         layers = []
@@ -91,46 +108,6 @@ class ConvDetector(nn.Module):
             layers.append(block(self.inchannels, channels, 3))
 
         return nn.Sequential(*layers)
-
-
-class CRNNC_GAN(nn.Module):
-    def __init__(self):
-        super(CRNNC_GAN, self).__init__()
-
-        self.conv_in = nn.Sequential(
-            nn.Conv1d(6, 64, 7, padding=3, groups=2, padding_mode='replicate'),
-            nn.BatchNorm1d(64),
-            nn.Hardswish(),
-            ResBlock1d(64, 64, 3, Activation=nn.Hardswish)
-        )
-
-        self.rnn = nn.RNN(input_size=64,
-                          hidden_size=64,
-                          num_layers=4,
-                          batch_first=True,
-                          dropout=0,
-                          bidirectional=False)
-
-        self.conv_out = nn.Sequential(
-            ResBlock1d(64, 64, 3, Activation=nn.Hardswish),
-            ResBlock1d(64, 128, 3, Activation=nn.Hardswish),
-            ResBlock1d(128, 128, 3, Activation=nn.Hardswish),
-            ResBlock1d(128, 256, 3, Activation=nn.Hardswish),
-            nn.Conv1d(256, 3, 1)
-        )
-
-    def forward(self, x):
-        x = x.transpose(1, 2)
-        x = self.conv_in(x)  # B, 6, S
-
-        x = x.transpose(1, 2)  # B, S, 6
-        outs, _ = self.rnn(x)  # B, S, 128
-        x = outs.transpose(1, 2)  # B, C, S
-
-        x = self.conv_out(x)  # B, C, S
-        x = x.transpose(1, 2)  # B, S, C
-
-        return x
 
 
 def plot_results(experiment_name: str, epoch: int, name: str, result_dir: Path, history):
@@ -202,8 +179,8 @@ def main(args):
     plt.switch_backend('agg')  # matplotlib을 cli에서 사용
 
     # 데이터셋 불러오기
-    data_train = np.load('data/1116/train-win_120-GAN.npz')
-    data_test = np.load('data/1116/test-win_120-GAN.npz')
+    data_train = np.load('data/1116/train-win_120-GAN2.npz')
+    data_test = np.load('data/1116/test-win_120-GAN2.npz')
     ds_train = GANDataset(data_train['X'], data_train['Y'])
     ds_test = GANDataset(data_test['X'], data_test['Y'])
     dl_kwargs = dict(batch_size=args.batch_size, num_workers=2, pin_memory=True)
@@ -211,26 +188,27 @@ def main(args):
     dl_test = DataLoader(ds_test, **dl_kwargs, shuffle=False)
 
     # Create model
-    G = CRNNC_GAN().cuda()
+    G = CRNNC_Hardswish().cuda()
     D = ConvDetector(ResBlock1d, [2, 2, 2, 2]).cuda()
     g_criterion = nn.MSELoss().cuda()
     d_criterion = nn.BCELoss().cuda()
     g_optimizer = torch_optimizer.RAdam(G.parameters())
     d_optimizer = torch_optimizer.RAdam(D.parameters())
 
-    div_means = MEANS[:3].reshape(1, 3, 1)
-    div_stds = STDS[:3].reshape(1, 3, 1)
+    div_means = MEANS[:3].reshape(1, 3)
+    div_stds = STDS[:3].reshape(1, 3)
     for epoch in range(1, args.epochs + 1):
         losses = [[], [], [], [], [], []]
         G.train()
         D.train()
+        total, correct = 0, 0
         for x_input_, x_real_ in dl_train:
             # D
             x_input = x_input_.cuda()
             x_real = x_real_.cuda()
             x_fake = G(x_input)
-            p_real = D(x_real)
-            p_fake = D(x_fake)
+            p_real = D(x_input, x_real)
+            p_fake = D(x_input, x_fake)
             y_real = torch.ones(x_real.shape[0], 1, dtype=torch.float32).cuda()
             y_fake = torch.zeros(x_fake.shape[0], 1, dtype=torch.float32).cuda()
             d_loss_real = d_criterion(p_real, y_real)
@@ -242,13 +220,15 @@ def main(args):
             losses[0].append(d_loss.item())
             losses[1].append(d_loss_real.item())
             losses[2].append(d_loss_fake.item())
+            total += p_real.shape[0] + p_fake.shape[0]
+            correct += ((p_real > 0.5) * y_real).sum().detach().cpu().item()
 
             # G
-            x_fake = G(x_input) # B, S, C
-            p_fake = D(x_fake)
-            g_loss_real = g_criterion(x_fake[:, -1:, :], x_real[:, -1:, :])
+            x_fake = G(x_input)  # B, S, C
+            p_fake = D(x_input, x_fake)
+            g_loss_real = g_criterion(x_fake, x_real)
             g_loss_fake = d_criterion(p_fake, y_fake)
-            g_loss = g_loss_real * 0.05 + g_loss_fake * 0.95
+            g_loss = g_loss_real * 0.1 + g_loss_fake * 0.9
             g_optimizer.zero_grad()
             g_loss.backward()
             g_optimizer.step()
@@ -257,12 +237,14 @@ def main(args):
             losses[5].append(g_loss_fake.item())
 
         losses = [sum(l) / len(l) for l in losses]
+        accuracy = correct / total
         print(f'[{epoch:03d}/{args.epochs:03d}] Train GAN: '
               f'd_loss: {losses[0]:.4f}, '
               f'd_loss_real: {losses[1]:.4f}, '
               f'd_loss_fake: {losses[2]:.4f}, '
               f'g_loss: {losses[3]:.4f}, '
-              f'g_loss_fake: {losses[5]:.4f}')
+              f'g_loss_fake: {losses[5]:.4f}, '
+              f'acc: {accuracy * 100:.2f}')
 
         G.eval()
         D.eval()
@@ -270,14 +252,15 @@ def main(args):
             losses = [[], [], [], [], [], []]
             X, Y, P = [], [], []
             diffs = []
+            total, correct = 0, 0
             for x_input_, x_real_ in dl_test:
                 # D
                 x_input = x_input_.cuda()
                 x_real = x_real_.cuda()
                 x_fake = G(x_input)
                 x_fake_ = x_fake.cpu()
-                p_real = D(x_real)
-                p_fake = D(x_fake)
+                p_real = D(x_input, x_real)
+                p_fake = D(x_input, x_fake)
                 y_real = torch.ones(x_real.shape[0], 1, dtype=torch.float32).cuda()
                 y_fake = torch.zeros(x_fake.shape[0], 1, dtype=torch.float32).cuda()
                 d_loss_real = d_criterion(p_real, y_real)
@@ -286,32 +269,36 @@ def main(args):
                 losses[0].append(d_loss.item())
                 losses[1].append(d_loss_real.item())
                 losses[2].append(d_loss_fake.item())
+                total += p_real.shape[0] + p_fake.shape[0]
+                correct += ((p_real > 0.5) * y_real).sum().detach().cpu().item()
 
                 # G
                 x_fake = G(x_input)
-                p_fake = D(x_fake)
-                g_loss_real = g_criterion(x_fake[:, -1:, :], x_real[:, -1:, :])
+                p_fake = D(x_input, x_fake)
+                g_loss_real = g_criterion(x_fake, x_real)
                 g_loss_fake = d_criterion(p_fake, y_fake)
-                g_loss = g_loss_real * 0.05 + g_loss_fake * 0.95
+                g_loss = g_loss_real * 0.1 + g_loss_fake * 0.9
                 losses[3].append(g_loss.item())
                 losses[4].append(g_loss_real.item())
                 losses[5].append(g_loss_fake.item())
 
-                x = x_input_.transpose(1, 2)[:, :3, -18:] * div_stds + div_means
-                y = x_real_.transpose(1, 2)[:, :3, -18:] * div_stds + div_means
-                p = x_fake_.transpose(1, 2)[:, :3, -18:] * div_stds + div_means
-                diffs.append((y - p)[:, :, -1])
-                X.append(torch.flatten(x, 0, 1))
-                Y.append(torch.flatten(y, 0, 1))
-                P.append(torch.flatten(p, 0, 1))
+                x = x_input_[:, -1, :3] * div_stds + div_means
+                y = x_real_ * div_stds + div_means
+                p = x_fake_ * div_stds + div_means
+                diffs.append(y - p)
+                X.append(x)
+                Y.append(y)
+                P.append(p)
 
             losses = [sum(l) / len(l) for l in losses]
+            accuracy = correct / total
             print(f'[{epoch:03d}/{args.epochs:03d}] Validate GAN: '
                   f'd_loss: {losses[0]:.4f}, '
                   f'd_loss_real: {losses[1]:.4f}, '
                   f'd_loss_fake: {losses[2]:.4f}, '
                   f'g_loss: {losses[3]:.4f}, '
-                  f'g_loss_fake: {losses[5]:.4f}')
+                  f'g_loss_fake: {losses[5]:.4f}, '
+                  f'acc: {accuracy * 100:.2f}')
 
             diffs = torch.cat(diffs)  # (B, 3)
             mae = diffs.abs().mean(dim=0)  # (3, ) --> yaw, pitch, roll
