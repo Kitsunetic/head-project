@@ -6,7 +6,7 @@ from .crnnc import CGRUC_Hardswish, CLSTMC_Hardswish, CRNNC_Hardswish
 from .crnnc import CGRUC_Hardswish_FC, CLSTMC_Hardswish_FC, CRNNC_Hardswish_FC
 from .crnnc import CRNNC5, CRNNC_PReLU, CRNNC_ReLU, CRNNC_Tanh
 from .inception import InceptionModel
-from .mlp import MLPBasedNet, MultiLayerPerceptron, SecondLayerPerceptron, SingleLayerPerceptron
+from .mlp import MLPBasedNet
 from .resnet import ResNet15
 from .rnn import BidirectionalStackedGRU, BidirectionalStackedLSTM, BidirectionalStackedRNN
 from .rnn import StackedGRU, StackedLSTM, StackedRNN
@@ -20,7 +20,7 @@ def _make_map(*networks):
     return nets
 
 
-_network_map = _make_map(SingleLayerPerceptron, SecondLayerPerceptron, MultiLayerPerceptron, MLPBasedNet,
+_network_map = _make_map(MLPBasedNet,
                          CNNBasedNet,
                          StackedRNN, StackedGRU, StackedLSTM,
                          BidirectionalStackedRNN, BidirectionalStackedGRU, BidirectionalStackedLSTM,

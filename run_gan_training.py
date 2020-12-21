@@ -1,9 +1,3 @@
-"""
-Q모델을 학습하면서 GAN의 G, D 모델도 함께 학습시켜보자
-
-Q모델은 shuffle을 안하면 학습이 느려진다는 특징 --> 일반적인 time series 모델들이 공유하는 문제일 듯?
-GAN 모델들은 학습이 잘 안됨
-"""
 import argparse
 import sys
 from pathlib import Path
@@ -18,10 +12,6 @@ from torch.utils.data import DataLoader, Dataset
 
 from networks.resnet import ResBlock1d
 
-# MEANS = torch.tensor([-2.5188, 7.4404, 0.0633, 0.2250, 9.5808, -1.0252], dtype=torch.float32)
-# STDS = torch.tensor([644.7101, 80.9247, 11.4308, 0.4956, 0.0784, 2.3869], dtype=torch.float32)
-# MEANS = torch.tensor([0, 0, 0, 0, 0, 0], dtype=torch.float32)
-# STDS = torch.tensor([1, 1, 1, 1, 1, 1], dtype=torch.float32)
 MEANS = torch.tensor([-1.6627, 8.2190, 0.5204, 0.3034, 9.5687, -1.1618], dtype=torch.float32)
 STDS = torch.tensor([24.1827, 8.8223, 3.1585, 0.6732, 0.2772, 1.5191], dtype=torch.float32)
 
@@ -243,7 +233,7 @@ def main(args):
             losses[2].append(d_loss_fake.item())
 
             # G
-            x_fake = G(x_input) # B, S, C
+            x_fake = G(x_input)  # B, S, C
             p_fake = D(x_fake)
             g_loss_real = g_criterion(x_fake[:, -1:, :], x_real[:, -1:, :])
             g_loss_fake = d_criterion(p_fake, y_fake)
