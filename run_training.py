@@ -12,9 +12,9 @@ import torch_optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from training_loop.data import SingleFileDataset
-from training_loop.metrics import HPMetric
-from training_loop.networks import get_model_by_name
+from data import SingleFileDataset
+from metrics import HPMetric
+from networks import get_model_by_name
 
 
 def annot_min(x, y, name, ax=None, xpos=None):
@@ -28,7 +28,6 @@ def annot_min(x, y, name, ax=None, xpos=None):
     text = f"epoch={xmax:.3f}, {name} {ymax:.3f}"
     if not ax:
         ax = plt.gca()
-    # arrowprops = dict(facecolor='black', shrink=0.7)
     arrowprops = dict(arrowstyle='->', connectionstyle="angle,angleA=0,angleB=60")
     ax.annotate(text, xy=(xmax, ymax), xytext=(xmax - 5, ymax - 2), arrowprops=arrowprops)
 
@@ -40,15 +39,6 @@ def main(args):
     plt.switch_backend('agg')
 
     # Create dataset
-    """
-    # Load csv files directly --> requires a little more CPUs
-    csv_files_train = sorted(list(Path(args.dataset).glob('*scene3_0.csv')))
-    csv_files_test = sorted(list(Path(args.dataset).glob('*scene3_1.csv')))
-    ds_train = [CSVSequentialDataset(f, args.window_size, args.stride) for f in csv_files_train]
-    ds_train = tb.data.ChainDataset(*ds_train)
-    ds_test = [CSVSequentialDataset(f, args.window_size, args.stride) for f in csv_files_test]
-    ds_test = tb.data.ChainDataset(*ds_test)
-    """
     ds_train = SingleFileDataset(Path(args.dataset) / f'train-win_{args.window_size}.npz')
     ds_test = SingleFileDataset(Path(args.dataset) / f'test-win_{args.window_size}.npz')
 

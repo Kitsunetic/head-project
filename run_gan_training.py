@@ -1,5 +1,10 @@
+"""
+Q모델을 학습하면서 GAN의 G, D 모델도 함께 학습시켜보자
+
+Q모델은 shuffle을 안하면 학습이 느려진다는 특징 --> 일반적인 time series 모델들이 공유하는 문제일 듯?
+GAN 모델들은 학습이 잘 안됨
+"""
 import argparse
-import random
 import sys
 from pathlib import Path
 
@@ -9,49 +14,34 @@ import torch
 import torch.nn as nn
 import torch_burn as tb
 import torch_optimizer
-from torch import Tensor
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
-from training_loop.data import SingleFileDataset
+from networks.resnet import ResBlock1d
 
-MEANS = torch.tensor([-2.5188, 7.4404, 0.0633, 0.2250, 9.5808, -1.0252], dtype=torch.float32)
-STDS = torch.tensor([644.7101, 80.9247, 11.4308, 0.4956, 0.0784, 2.3869], dtype=torch.float32)
+# MEANS = torch.tensor([-2.5188, 7.4404, 0.0633, 0.2250, 9.5808, -1.0252], dtype=torch.float32)
+# STDS = torch.tensor([644.7101, 80.9247, 11.4308, 0.4956, 0.0784, 2.3869], dtype=torch.float32)
+# MEANS = torch.tensor([0, 0, 0, 0, 0, 0], dtype=torch.float32)
+# STDS = torch.tensor([1, 1, 1, 1, 1, 1], dtype=torch.float32)
+MEANS = torch.tensor([-1.6627, 8.2190, 0.5204, 0.3034, 9.5687, -1.1618], dtype=torch.float32)
+STDS = torch.tensor([24.1827, 8.8223, 3.1585, 0.6732, 0.2772, 1.5191], dtype=torch.float32)
 
-plot_idx = -1
 
+class GANDataset(Dataset):
+    def __init__(self, X: np.ndarray, Y: np.ndarray):
+        super(GANDataset, self).__init__()
 
-class ResBlock1d(nn.Module):
-    expansion = 1
+        self.X = torch.tensor(X, dtype=torch.float32)
+        self.Y = torch.tensor(Y, dtype=torch.float32)
+        self.X = (self.X - MEANS.reshape(1, 1, 6)) / STDS.reshape(1, 1, 6)
+        self.Y = (self.Y - MEANS[:3].reshape(1, 1, 3)) / STDS[:3].reshape(1, 1, 3)
 
-    def __init__(self, inchannels, channels, kernel_size, stride=1, groups=1):
-        super(ResBlock1d, self).__init__()
+    def __len__(self):
+        return self.X.shape[0]
 
-        self.conv1 = nn.Sequential(
-            nn.Conv1d(inchannels, channels, kernel_size, padding=kernel_size // 2, stride=stride, groups=groups),
-            nn.BatchNorm1d(channels),
-            nn.LeakyReLU(),
-            nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2, groups=groups),
-            nn.BatchNorm1d(channels)
-        )
-        self.act = nn.LeakyReLU()
-
-        self.conv2 = None
-        if inchannels != channels:
-            self.conv2 = nn.Sequential(
-                nn.Conv1d(inchannels, channels, 1, stride=stride, groups=groups),
-                nn.BatchNorm1d(channels)
-            )
-
-    def forward(self, x):
-        identity = x
-
-        x = self.conv1(x)
-        if self.conv2 is not None:
-            identity = self.conv2(identity)
-        x += identity
-        x = self.act(x)
-
-        return x
+    def __getitem__(self, idx):
+        x = self.X[idx]  # B, S, C
+        y = self.Y[idx]
+        return x, y
 
 
 class ConvDetector(nn.Module):
@@ -61,7 +51,7 @@ class ConvDetector(nn.Module):
         self.inchannels = 64
 
         self.conv1 = nn.Sequential(
-            nn.Conv1d(3, self.inchannels, 7, stride=2, padding=3, bias=False),
+            nn.Conv1d(3, self.inchannels, 7, stride=2, padding=3, padding_mode='replicate', bias=False),
             nn.BatchNorm1d(64),
             nn.ReLU()
         )
@@ -102,15 +92,15 @@ class ConvDetector(nn.Module):
         return nn.Sequential(*layers)
 
 
-class CRNNC_M2M(nn.Module):
-    def __init__(self, Activation=nn.LeakyReLU):
-        super(CRNNC_M2M, self).__init__()
+class CRNNC_GAN(nn.Module):
+    def __init__(self):
+        super(CRNNC_GAN, self).__init__()
 
         self.conv_in = nn.Sequential(
-            nn.Conv1d(6, 64, 7, padding=3, groups=2),
+            nn.Conv1d(6, 64, 7, padding=3, groups=2, padding_mode='replicate'),
             nn.BatchNorm1d(64),
-            Activation(),
-            ResBlock1d(64, 64, 3)
+            nn.Hardswish(),
+            ResBlock1d(64, 64, 3, Activation=nn.Hardswish)
         )
 
         self.rnn = nn.RNN(input_size=64,
@@ -121,165 +111,244 @@ class CRNNC_M2M(nn.Module):
                           bidirectional=False)
 
         self.conv_out = nn.Sequential(
-            ResBlock1d(64, 128, 3),
-            ResBlock1d(128, 256, 3),
+            ResBlock1d(64, 64, 3, Activation=nn.Hardswish),
+            ResBlock1d(64, 128, 3, Activation=nn.Hardswish),
+            ResBlock1d(128, 128, 3, Activation=nn.Hardswish),
+            ResBlock1d(128, 256, 3, Activation=nn.Hardswish),
             nn.Conv1d(256, 3, 1)
         )
 
     def forward(self, x):
-        x = x.transpose(1, 2)  # B, S, 6 --> B, 6, S
+        x = x.transpose(1, 2)
         x = self.conv_in(x)  # B, 6, S
-        x = x.transpose(1, 2)  # B, S, 6
 
+        x = x.transpose(1, 2)  # B, S, 6
         outs, _ = self.rnn(x)  # B, S, 128
         x = outs.transpose(1, 2)  # B, C, S
-        x = self.conv_out(x)  # B, 3, S
-        x = x.transpose(1, 2)  # B, S, 3
+
+        x = self.conv_out(x)  # B, C, S
+        x = x.transpose(1, 2)  # B, S, C
 
         return x
 
 
-def plot_results(epoch: int, result_dir: Path, x_input: Tensor, x_real: Tensor, x_fake: Tensor):
-    global plot_idx
-
-    x_input = x_input.detach().cpu()
-    x_real = x_real.detach().cpu()
-    x_fake = x_fake.detach().cpu()
-
-    plot_idx = random.randint(0, x_input.shape[0])
-
-    X = np.linspace(0, x_input.shape[1] / 60, x_input.shape[1])
-    titles = [f'Yaw - {epoch:03d}', f'Pitch - {epoch:03d}', f'Roll - Epoch{epoch:03d}']
-
+def plot_results(experiment_name: str, epoch: int, name: str, result_dir: Path, history):
+    x_ = torch.cat(history[f'{name}:x'])
+    y_ = torch.cat(history[f'{name}:y'])
+    p_ = torch.cat(history[f'{name}:p'])
+    x = x_[200:800]
+    y = y_[200:800]
+    p = p_[200:800]
+    X = np.linspace(0, 10, 600)
     plt.figure(figsize=(16, 4))
-    for i in range(3):
+    plt.title(f'{name}-{experiment_name}-Epoch{epoch:03d}')
+    for i, title in enumerate(['Yaw', 'Pitch', 'Roll']):
         plt.subplot(1, 3, i + 1)
-        plt.plot(X, x_real[plot_idx, :, i] * STDS[i] + MEANS[i])
-        plt.plot(X, x_fake[plot_idx, :, i] * STDS[i] + MEANS[i])
-        plt.title(titles[i])
-        plt.ylabel('Degree')
-        plt.xlabel('Time (s)')
-        plt.legend(['Real', 'Fake'])
-        plt.ylim(-100, 100)
-        plt.tight_layout()
-        plt.savefig(result_dir / f'sample-{epoch:03d}.png')
+        plt.plot(X, x[:, i])
+        plt.plot(X, p[:, i])
+        plt.plot(X, y[:, i])
+        plt.ylabel(title + ' (degree)')
+        plt.xlabel('Time (sec)')
+        plt.legend(['Input', 'Prediction', 'Real'])
+    plt.tight_layout()
+    plt.savefig(result_dir / f'{name}-{experiment_name}-Epoch{epoch:03d}.png')
     plt.close()
+
+
+def annot_min(x, y, name, ax=None, xpos=None):
+    if xpos is None:
+        xpos = np.argmin(y)
+        xmax = x[xpos]
+        ymax = min(y)
+    else:
+        xmax = x[xpos]
+        ymax = y[xpos]
+    text = f"epoch={xmax:.3f}, {name} {ymax:.3f}"
+    if not ax:
+        ax = plt.gca()
+    # arrowprops = dict(facecolor='black', shrink=0.7)
+    arrowprops = dict(arrowstyle='->', connectionstyle="angle,angleA=0,angleB=60")
+    ax.annotate(text, xy=(xmax, ymax), xytext=(xmax - 5, ymax - 2), arrowprops=arrowprops)
+
+    return xpos
+
+
+def plot_error_history(args, name, history):
+    epoch = len(history[f'{name}:loss'])
+    X = np.linspace(0, epoch, epoch)
+
+    plt.figure(figsize=(6, 6))
+    plt.plot(X, history[f'{name}:yaw'])
+    plt.plot(X, history[f'{name}:pitch'])
+    plt.plot(X, history[f'{name}:roll'])
+    plt.plot(X, history[f'{name}:rms'])
+    plt.plot(X, history[f'{name}:tile99'])
+    plt.legend(['Yaw', 'Pitch', 'Roll', 'RMS', '99%ile'])
+    xpos = annot_min(X, np.array(history[f'{name}:tile99']), '99tile')
+    annot_min(X, np.array(history[f'{name}:yaw']), 'yaw', xpos=xpos)
+    annot_min(X, np.array(history[f'{name}:pitch']), 'pitch', xpos=xpos)
+    annot_min(X, np.array(history[f'{name}:roll']), 'roll', xpos=xpos)
+    annot_min(X, np.array(history[f'{name}:rms']), 'rms', xpos=xpos)
+    plt.xlabel('Epochs')
+    plt.ylabel('Error (Degree)')
+    plt.ylim(0, 25)
+    plt.tight_layout()
+    plt.savefig(args.experiment_path / 'error_plot-Q.png')
 
 
 def main(args):
     tb.seed_everything(args.seed)
+    plt.switch_backend('agg')  # matplotlib을 cli에서 사용
 
-    # Create dataset
-    ds_train = SingleFileDataset(Path(args.dataset) / f'train-win_{args.window_size}-m2m.npz', means=MEANS, stds=STDS)
-    ds_test = SingleFileDataset(Path(args.dataset) / f'test-win_{args.window_size}-m2m.npz', means=MEANS, stds=STDS)
-    dl_train = DataLoader(ds_train, batch_size=args.batch_size, num_workers=6, pin_memory=True)
-    dl_test = DataLoader(ds_test, batch_size=args.batch_size, num_workers=6, pin_memory=True)
+    # 데이터셋 불러오기
+    data_train = np.load('data/1116/train-win_120-GAN.npz')
+    data_test = np.load('data/1116/test-win_120-GAN.npz')
+    ds_train = GANDataset(data_train['X'], data_train['Y'])
+    ds_test = GANDataset(data_test['X'], data_test['Y'])
+    dl_kwargs = dict(batch_size=args.batch_size, num_workers=2, pin_memory=True)
+    dl_train = DataLoader(ds_train, **dl_kwargs, shuffle=True)
+    dl_test = DataLoader(ds_test, **dl_kwargs, shuffle=False)
 
     # Create model
-    G = CRNNC_M2M(Activation=nn.Hardswish).cuda()
+    G = CRNNC_GAN().cuda()
     D = ConvDetector(ResBlock1d, [2, 2, 2, 2]).cuda()
     g_criterion = nn.MSELoss().cuda()
     d_criterion = nn.BCELoss().cuda()
     g_optimizer = torch_optimizer.RAdam(G.parameters())
     d_optimizer = torch_optimizer.RAdam(D.parameters())
 
+    div_means = MEANS[:3].reshape(1, 3, 1)
+    div_stds = STDS[:3].reshape(1, 3, 1)
     for epoch in range(1, args.epochs + 1):
-        # ===============================================================
-        #                      Train Loop
-        # ===============================================================
+        losses = [[], [], [], [], [], []]
         G.train()
         D.train()
-        total_steps = len(dl_train)
-        for step, (x_input, x_real) in enumerate(dl_train, 1):
-            x_input = x_input.cuda()
-            x_real = x_real.cuda()
+        for x_input_, x_real_ in dl_train:
+            # D
+            x_input = x_input_.cuda()
+            x_real = x_real_.cuda()
             x_fake = G(x_input)
-
-            pred_real = D(x_real)
-            pred_fake = D(x_fake)
-            y_real = torch.ones(pred_real.shape[0], 1, dtype=torch.float32).cuda()
-            y_fake = torch.zeros(pred_real.shape[0], 1, dtype=torch.float32).cuda()
-
-            d_loss_real = d_criterion(pred_real, y_real)
-            d_loss_fake = d_criterion(pred_fake, y_fake)
+            p_real = D(x_real)
+            p_fake = D(x_fake)
+            y_real = torch.ones(x_real.shape[0], 1, dtype=torch.float32).cuda()
+            y_fake = torch.zeros(x_fake.shape[0], 1, dtype=torch.float32).cuda()
+            d_loss_real = d_criterion(p_real, y_real)
+            d_loss_fake = d_criterion(p_fake, y_fake)
             d_loss = d_loss_real + d_loss_fake
             d_optimizer.zero_grad()
             d_loss.backward()
             d_optimizer.step()
+            losses[0].append(d_loss.item())
+            losses[1].append(d_loss_real.item())
+            losses[2].append(d_loss_fake.item())
 
-            x_fake = G(x_input)
-            pred_fake = D(x_fake)
-            g_loss_real = g_criterion(x_fake, x_real)
-            g_loss_fake = d_criterion(pred_fake, y_fake)
-            g_loss = g_loss_real * 0.1 + g_loss_fake * 0.9
+            # G
+            x_fake = G(x_input) # B, S, C
+            p_fake = D(x_fake)
+            g_loss_real = g_criterion(x_fake[:, -1:, :], x_real[:, -1:, :])
+            g_loss_fake = d_criterion(p_fake, y_fake)
+            g_loss = g_loss_real * 0.05 + g_loss_fake * 0.95
             g_optimizer.zero_grad()
             g_loss.backward()
             g_optimizer.step()
+            losses[3].append(g_loss.item())
+            losses[4].append(g_loss_real.item())
+            losses[5].append(g_loss_fake.item())
 
-            if step % 100 == 0 or step == total_steps:
-                print(f'Train Epoch[{epoch:03d}/{args.epochs:03d}] Step [{step:03d}/{total_steps:03d}] '
-                      f'd_loss: {d_loss.item():.4f}, '
-                      f'd_loss_real: {d_loss_real.item():.4f}, '
-                      f'd_loss_fake: {d_loss_fake:.4f} '
-                      f'g_loss: {g_loss.item():.4f}')
+        losses = [sum(l) / len(l) for l in losses]
+        print(f'[{epoch:03d}/{args.epochs:03d}] Train GAN: '
+              f'd_loss: {losses[0]:.4f}, '
+              f'd_loss_real: {losses[1]:.4f}, '
+              f'd_loss_fake: {losses[2]:.4f}, '
+              f'g_loss: {losses[3]:.4f}, '
+              f'g_loss_fake: {losses[5]:.4f}')
 
-        # ===============================================================
-        #                      Validation Loop
-        # ===============================================================
+        G.eval()
+        D.eval()
         with torch.no_grad():
-            G.eval()
-            D.eval()
-            total_steps = len(dl_test)
-            for step, (x_input, x_real) in enumerate(dl_test, 1):
-                x_input = x_input.cuda()
-                x_real = x_real.cuda()
+            losses = [[], [], [], [], [], []]
+            X, Y, P = [], [], []
+            diffs = []
+            for x_input_, x_real_ in dl_test:
+                # D
+                x_input = x_input_.cuda()
+                x_real = x_real_.cuda()
                 x_fake = G(x_input)
-
-                pred_real = D(x_real)
-                pred_fake = D(x_fake)
-                y_real = torch.ones(pred_real.shape[0], 1, dtype=torch.float32).cuda()
-                y_fake = torch.zeros(pred_real.shape[0], 1, dtype=torch.float32).cuda()
-
-                d_loss_real = d_criterion(pred_real, y_real)
-                d_loss_fake = d_criterion(pred_fake, y_fake)
+                x_fake_ = x_fake.cpu()
+                p_real = D(x_real)
+                p_fake = D(x_fake)
+                y_real = torch.ones(x_real.shape[0], 1, dtype=torch.float32).cuda()
+                y_fake = torch.zeros(x_fake.shape[0], 1, dtype=torch.float32).cuda()
+                d_loss_real = d_criterion(p_real, y_real)
+                d_loss_fake = d_criterion(p_fake, y_fake)
                 d_loss = d_loss_real + d_loss_fake
+                losses[0].append(d_loss.item())
+                losses[1].append(d_loss_real.item())
+                losses[2].append(d_loss_fake.item())
 
+                # G
                 x_fake = G(x_input)
-                pred_fake = D(x_fake)
-                g_loss_real = g_criterion(x_fake, x_real)
-                g_loss_fake = d_criterion(pred_fake, y_fake)
-                g_loss = g_loss_real * 0.1 + g_loss_fake * 0.9
+                p_fake = D(x_fake)
+                g_loss_real = g_criterion(x_fake[:, -1:, :], x_real[:, -1:, :])
+                g_loss_fake = d_criterion(p_fake, y_fake)
+                g_loss = g_loss_real * 0.05 + g_loss_fake * 0.95
+                losses[3].append(g_loss.item())
+                losses[4].append(g_loss_real.item())
+                losses[5].append(g_loss_fake.item())
 
-                if step % 100 == 0 or step == total_steps:
-                    print(f'Valid Epoch[{epoch:03d}/{args.epochs:03d}] Step [{step:02d}/{total_steps:02d}] '
-                          f'd_loss: {d_loss.item():.4f}, '
-                          f'd_loss_real: {d_loss_real.item():.4f}, '
-                          f'd_loss_fake: {d_loss_fake:.4f} '
-                          f'g_loss: {g_loss.item():.4f}')
+                x = x_input_.transpose(1, 2)[:, :3, -18:] * div_stds + div_means
+                y = x_real_.transpose(1, 2)[:, :3, -18:] * div_stds + div_means
+                p = x_fake_.transpose(1, 2)[:, :3, -18:] * div_stds + div_means
+                diffs.append((y - p)[:, :, -1])
+                X.append(torch.flatten(x, 0, 1))
+                Y.append(torch.flatten(y, 0, 1))
+                P.append(torch.flatten(p, 0, 1))
 
-            plot_results(epoch, args.experiment_path, x_input, x_real, x_fake)
+            losses = [sum(l) / len(l) for l in losses]
+            print(f'[{epoch:03d}/{args.epochs:03d}] Validate GAN: '
+                  f'd_loss: {losses[0]:.4f}, '
+                  f'd_loss_real: {losses[1]:.4f}, '
+                  f'd_loss_fake: {losses[2]:.4f}, '
+                  f'g_loss: {losses[3]:.4f}, '
+                  f'g_loss_fake: {losses[5]:.4f}')
+
+            diffs = torch.cat(diffs)  # (B, 3)
+            mae = diffs.abs().mean(dim=0)  # (3, ) --> yaw, pitch, roll
+            rms = mae.square().sum().div(3).sqrt()  # (1, )
+            tile = diffs.square().mean(dim=1).sqrt().numpy()  # (B, )
+            tile99 = np.percentile(tile, 99)
+            print(f'[{epoch:03d}/{args.epochs:03d}] Validate GAN: '
+                  f'yaw {mae[0].item():.4f}, '
+                  f'pitch {mae[1].item():.4f}, '
+                  f'roll {mae[2].item():.4f}, '
+                  f'rms {rms.item():.4f}, '
+                  f'tile99 {tile99:.4f}')
+
+            X = torch.cat(X)  # (L, 3)
+            Y = torch.cat(Y)
+            P = torch.cat(P)
+            np.savez_compressed(args.experiment_path / f'data-epoch{epoch}.npz', X=X, Y=Y, P=P)
 
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--window-size', type=int, default=60)
     argparser.add_argument('--epochs', type=int, default=200)
     argparser.add_argument('--batch-size', type=int, default=256)
-    argparser.add_argument('--dataset', type=str, required=True)
     argparser.add_argument('--result', type=str, default='results')
-    argparser.add_argument('experiment_name', type=str)
+    argparser.add_argument('--comment', type=str, default='')
 
     args = argparser.parse_args(sys.argv[1:])
     args.result = Path(args.result)
     dirs = []
     if args.result.is_dir():
         for f in args.result.iterdir():
-            if not f.is_dir() or len(f.name) < 6 or not str.isdigit(f.name[:4]):
+            if not f.is_dir() or len(list(f.iterdir())) == 0 or not str.isdigit(f.name[:4]):
                 continue
             dirs.append(f)
     dirs = sorted(dirs)
     experiment_number = int(dirs[-1].name[:4]) + 1 if dirs else 0
-    args.experiment_path = args.result / f'{experiment_number:04d}-{args.experiment_name}'
+    comment = f'-{args.comment}' if args.comment else ''
+    args.experiment_path = args.result / f'{experiment_number:04d}{comment}'
     args.experiment_path.mkdir(parents=True, exist_ok=True)
     print('Experiment Path:', args.experiment_path)
 
